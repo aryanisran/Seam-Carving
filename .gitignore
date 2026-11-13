@@ -1,0 +1,30 @@
+# Build artifacts
+build/
+bin/
+*.o
+*.obj
+*.exe
+*.out
+*.dSYM/
+
+# Editor & OS files
+.vscode/
+.idea/
+*.swp
+*~
+.DS_Store
+Thumbs.db
+
+# Generated outputs from runs & benchmarks
+benchmark_*.csv
+seams*.json
+carved_*.jpg
+carved_*.png
+carved_*.bmp
+output*.jpg
+output*.png
+output*.bmp
+result*.jpg
+result*.png
+result*.bmp
+*.log
