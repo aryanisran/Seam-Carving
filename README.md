@@ -10,10 +10,15 @@ Developed for **CSD3130 Assignment 2**, targeted to build and run seamlessly und
 1. [Theoretical Formulation](#theoretical-formulation)
 2. [Supported Solvers](#supported-solvers)
 3. [Project Structure](#project-structure)
-4. [Building & Testing (WSL)](#building--testing-wsl)
+4. [Building & Testing](#building--testing)
 5. [CLI Usage & Options](#cli-usage--options)
 6. [Benchmarking & Complexity Analysis](#benchmarking--complexity-analysis)
-7. [Teammate Integration Guide (Visualizer & Bonus)](#teammate-integration-guide-visualizer--bonus)
+7. [Bonus Features](#bonus-features)
+   - [7a. Step-by-Step Visualizer](#7a-step-by-step-visualizer)
+   - [7b. Interactive Web Application](#7b-interactive-web-application)
+   - [7c. CI/CD & Automated Releases](#7c-cicd--automated-releases)
+   - [Seam Export Format & Extensibility](#seam-export-format--extensibility)
+   - [Programmatic C++ API](#programmatic-c-api)
 
 ---
 
@@ -87,6 +92,20 @@ The system provides two interchangeable max-flow algorithms through a unified in
 ```
 ├── Makefile                    # GNU Makefile (g++ -O3 -std=c++17)
 ├── .gitignore                  # Excludes binaries, build objects, and outputs
+├── .github/workflows/
+│   └── ci.yml                  # GitHub Actions CI/CD (build, test, smoke test, releases)
+├── bonus/                      # Bonus features (Item 7)
+│   ├── app.py                  # Streamlit interactive web application
+│   ├── carver.py               # Python wrapper executing bin/seam_carve
+│   ├── make_sample.py          # Synthetic test image generator
+│   ├── README.md               # Bonus module documentation & instructions
+│   ├── requirements.txt        # Python dependencies (streamlit, pillow, numpy, pytest)
+│   ├── visualize.py            # Step-by-step seam replay, GIF, overlay, comparison
+│   └── tests/                  # Pytest suite (29 tests)
+│       ├── conftest.py
+│       └── test_visualize.py   # Seam validation, replay, pixel-exact match tests
+├── samples/
+│   └── synthetic_tower.png     # Benchmark test image
 ├── include/
 │   ├── image.hpp               # Image container, pixel access, transpose, seam removal
 │   ├── energy.hpp              # Dual-gradient & Sobel filter gradient calculations
@@ -108,38 +127,64 @@ The system provides two interchangeable max-flow algorithms through a unified in
 │   ├── benchmark.cpp
 │   └── main.cpp                # CLI application
 └── tests/
-    └── test_graph_cut.cpp      # Unit test suite verifying cut validity & solvers
+    └── test_graph_cut.cpp      # C++ unit test suite verifying cut validity & solvers
 ```
 
 ---
 
-## Building & Testing (WSL)
+## Building & Testing
 
-### Prerequisites
+### 1. C++ Core (WSL / Linux)
+
+#### Prerequisites
 In WSL (e.g., Ubuntu):
 ```bash
 sudo apt update
 sudo apt install build-essential
 ```
 
-### Build Commands
+#### Build & Test Commands
 ```bash
 # Build the main CLI executable (bin/seam_carve)
 make all
 
-# Build and execute unit tests (bin/test_graph_cut)
+# Build and execute C++ unit tests (bin/test_graph_cut)
 make test
 
 # Clean build artifacts
 make clean
 ```
 
-All 7 unit tests verify:
+All 7 C++ unit tests verify:
 - Known global minimum cut on synthetic grids.
 - Boundary edge conditions (leftmost and rightmost columns).
 - Prevention of jump discontinuities ($|c_r - c_{r+1}| > 1$).
 - Horizontal seam extraction via transposition.
 - Energy equivalence and non-zero flow across both Dinic and Edmonds-Karp.
+
+### 2. Python Bonus Suite & Visualizer
+
+#### Prerequisites
+```bash
+# Setup virtual environment
+python3 -m venv .venv
+source .venv/bin/activate        # On Windows: .venv\Scripts\activate
+
+# Install dependencies
+pip install -r bonus/requirements.txt
+```
+
+#### Running Python Tests
+```bash
+# Run all 29 pytest tests
+python -m pytest bonus/tests -v
+```
+
+The Python test suite verifies:
+- JSON parsing and seam record schema validation.
+- Boundary bounds checking and 8-connectivity validation.
+- Transposition handling for horizontal seam replay.
+- **Pixel-exact equivalence** checking that Python seam replay matches the output of `bin/seam_carve` byte-for-byte.
 
 ---
 
@@ -217,12 +262,75 @@ Testing 3 vertical seams followed by 2 horizontal seams under identical graph co
 
 ---
 
-## Teammate Integration Guide (Visualizer & Bonus)
+## Bonus Features
 
-For teammates developing GUI interactions, step-by-step visualizers, or comparing against Dynamic Programming / Greedy algorithms:
+| Bonus | What | Implementation |
+|---|---|---|
+| **7a. Step-by-Step Visualisation** | Animated GIF highlighting each seam before removal; all seams mapped to original coordinates; 4-way comparison (seam carving vs. scaling vs. cropping); energy map render | [`bonus/visualize.py`](bonus/visualize.py) |
+| **7b. User Interaction** | Streamlit web application: upload image, adjust target dimensions, choose solver/energy, carve, and scrub through intermediate steps | [`bonus/app.py`](bonus/app.py) |
+| **7c. CI/CD & Releases** | Automated GitHub Actions workflow: C++ build & tests, Python test suite, Streamlit smoke test, demo artifacts, and tag-triggered GitHub Releases | [`.github/workflows/ci.yml`](.github/workflows/ci.yml) |
 
-### Option A: Decoupled via JSON Export (`--export-seams`)
-Running `./bin/seam_carve ... --export-seams seams.json` outputs an array of all carved steps:
+> **Design Note:** The bonus layer never reimplements seam finding. Every seam originates from the C++ graph-cut engine via `--export-seams` JSON. The Python suite simply replays, validates, and renders the result. A test verifies that the Python replay matches the C++ output **pixel for pixel**.
+
+---
+
+### 7a. Step-by-Step Visualizer
+
+`bonus/visualize.py` replays the JSON seam records against the original image to produce comprehensive analysis artifacts:
+
+- **`steps.gif`**: Animated progression with each horizontal/vertical seam rendered in red before removal.
+- **`overlay.png`**: Original image with all removed seams drawn simultaneously. Reconstructed by maintaining an $O(HW)$ coordinate tracking grid across seam steps.
+- **`comparison.png`**: Side-by-side comparison figure displaying:
+  1. *Original Image*
+  2. *Seam Carving* (content-aware)
+  3. *Scaling* (Lanczos downsampling)
+  4. *Cropping* (center crop)
+- **`energy.png`**: Visual representation of the dual-gradient energy landscape.
+
+#### Usage:
+```bash
+# 1. Carve image and export seam metadata in C++
+./bin/seam_carve -i samples/synthetic_tower.png -o carved.png --remove-cols 40 --remove-rows 15 --export-seams seams.json
+
+# 2. Render all visualisations to bonus/out/
+python bonus/visualize.py --image samples/synthetic_tower.png --seams seams.json --out bonus/out
+```
+
+---
+
+### 7b. Interactive Web Application
+
+An interactive web application built with [Streamlit](https://streamlit.io/) provides hands-on exploration of graph-cut seam carving:
+
+- **Live Carving**: Choose from built-in samples or upload custom images.
+- **Configurable Parameters**: Adjust columns/rows to remove, max-flow solver (`dinic` vs. `edmonds_karp`), and gradient metric (`dual` vs. `sobel`).
+- **Interactive Scrubber**: After carving, scrub smoothly through every intermediate image size without re-running flow computations, replaying saved seam records on demand.
+- **Execution Diagnostics**: Displays wall-clock runtime, max-flow values, and step breakdown logs.
+
+#### Running the App:
+```bash
+streamlit run bonus/app.py
+```
+*Open http://localhost:8501 in your browser.*
+
+---
+
+### 7c. CI/CD & Automated Releases
+
+The repository includes a production-grade GitHub Actions pipeline ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)):
+
+1. **C++ CI**: Compiles using `g++ -O3 -Wall -Wextra -Wpedantic` (`make all`) and runs the unit test suite (`make test`).
+2. **Python CI**: Sets up Python 3.11, installs dependencies, and runs all 29 `pytest` test cases.
+3. **App Smoke Test**: Boots the Streamlit app headlessly and validates responsiveness via health-check probes.
+4. **End-to-End Demo**: Carves a synthetic test image, generates all visualization outputs, and uploads them as downloadable workflow artifacts.
+5. **Continuous Deployment (CD)**: Pushing a git tag (e.g. `v1.0`) automatically publishes a GitHub Release containing prebuilt binaries, demonstration GIFs, and benchmark figures.
+
+---
+
+### Seam Export Format & Extensibility
+
+The C++ binary and Python visualization layer communicate via a standardized, decoupled JSON interface (`--export-seams`):
+
 ```json
 {
   "seams": [
@@ -236,17 +344,22 @@ Running `./bin/seam_carve ... --export-seams seams.json` outputs an array of all
       "elapsed_ms": 12.4,
       "augmenting_paths": 28,
       "bfs_runs": 8,
-      "indices": [120, 121, 121, 122, ...]
+      "indices": [120, 121, 121, 122]
     }
   ]
 }
 ```
-- For vertical seams: `indices[r]` is the column index removed in row `r`.
-- For horizontal seams: `indices[c]` is the row index removed in column `c`.
-- Perfect for highlighting seams on the original canvas in OpenGL, SFML, Qt, or web visualizers!
+- For vertical seams: `indices[r]` is the column index removed at row `r`.
+- For horizontal seams: `indices[c]` is the row index removed at column `c`.
 
-### Option B: Programmatic C++ API
-Include the modular headers directly in your GUI or comparison harness:
+> **Pluggable Architecture:** Any alternative algorithm (such as Dynamic Programming or Greedy Search) can produce this identical JSON output schema and immediately gain animated GIF export, comparison panels, and Streamlit interactive scrubbers with zero code modifications.
+
+---
+
+### Programmatic C++ API
+
+The C++ codebase is modularly designed and can be integrated directly into other applications:
+
 ```cpp
 #include "image.hpp"
 #include "energy.hpp"
