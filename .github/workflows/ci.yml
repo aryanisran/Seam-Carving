@@ -1,0 +1,85 @@
+name: CI/CD
+
+on:
+  push:
+    branches: ["**"]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write # needed to publish releases on tags
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # ---- C++ graph cut ---------------------------------------------------
+      - name: Build (g++ -O3, -Wall -Wextra -Wpedantic)
+        run: make all
+
+      - name: C++ unit tests
+        run: make test
+
+      # ---- Python bonus (visualiser + app) --------------------------------
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: bonus/requirements.txt
+
+      - name: Install Python dependencies
+        run: pip install -r bonus/requirements.txt
+
+      - name: Python tests (incl. C++ <-> Python integration)
+        run: python -m pytest bonus/tests -v
+
+      - name: App smoke test (imports and renders without errors)
+        run: |
+          timeout 60 streamlit run bonus/app.py --server.headless true --server.port 8501 &
+          for i in $(seq 1 30); do curl -sf http://localhost:8501/_stcore/health && break; sleep 1; done
+          curl -sf http://localhost:8501/_stcore/health
+
+      # ---- Demo run: carve a sample and render all visualisations ---------
+      - name: Carve sample image
+        run: |
+          python bonus/make_sample.py
+          mkdir -p demo
+          ./bin/seam_carve -i samples/synthetic_tower.png -o demo/carved.png \
+            --remove-cols 40 --remove-rows 15 --solver dinic \
+            --export-seams demo/seams.json --compare --export-csv demo/benchmark.csv
+
+      - name: Render visualisations
+        run: python bonus/visualize.py --image samples/synthetic_tower.png --seams demo/seams.json --out demo
+
+      - name: Upload demo outputs
+        uses: actions/upload-artifact@v4
+        with:
+          name: seam-carving-demo
+          path: |
+            demo/
+            bin/seam_carve
+
+  release:
+    # CD: pushing a tag like v1.0 publishes a GitHub Release with the binary and demo outputs
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: seam-carving-demo
+          path: dist
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: |
+            dist/bin/seam_carve
+            dist/demo/steps.gif
+            dist/demo/overlay.png
+            dist/demo/comparison.png
+            dist/demo/benchmark.csv

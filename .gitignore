@@ -28,3 +28,11 @@ result*.jpg
 result*.png
 result*.bmp
 *.log
+
+# Python / bonus outputs
+__pycache__/
+.pytest_cache/
+*.pyc
+.venv/
+bonus/out/
+demo/
