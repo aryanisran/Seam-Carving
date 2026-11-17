@@ -19,6 +19,7 @@ Developed for **CSD3130 Assignment 2**, targeted to build and run seamlessly und
    - [7c. CI/CD & Automated Releases](#7c-cicd--automated-releases)
    - [Seam Export Format & Extensibility](#seam-export-format--extensibility)
    - [Programmatic C++ API](#programmatic-c-api)
+8. [AI Usage Declaration](#ai-usage-declaration)
 
 ---
 
@@ -90,44 +91,44 @@ The system provides two interchangeable max-flow algorithms through a unified in
 ## Project Structure
 
 ```
-├── Makefile                    # GNU Makefile (g++ -O3 -std=c++17)
-├── .gitignore                  # Excludes binaries, build objects, and outputs
-├── .github/workflows/
-│   └── ci.yml                  # GitHub Actions CI/CD (build, test, smoke test, releases)
-├── bonus/                      # Bonus features (Item 7)
-│   ├── app.py                  # Streamlit interactive web application
-│   ├── carver.py               # Python wrapper executing bin/seam_carve
-│   ├── make_sample.py          # Synthetic test image generator
-│   ├── README.md               # Bonus module documentation & instructions
-│   ├── requirements.txt        # Python dependencies (streamlit, pillow, numpy, pytest)
-│   ├── visualize.py            # Step-by-step seam replay, GIF, overlay, comparison
-│   └── tests/                  # Pytest suite (29 tests)
-│       ├── conftest.py
-│       └── test_visualize.py   # Seam validation, replay, pixel-exact match tests
-├── samples/
-│   └── synthetic_tower.png     # Benchmark test image
-├── include/
-│   ├── image.hpp               # Image container, pixel access, transpose, seam removal
-│   ├── energy.hpp              # Dual-gradient & Sobel filter gradient calculations
-│   ├── graph.hpp               # Adjacency list representation with residual capacities
-│   ├── maxflow.hpp             # Abstract MaxFlowSolver, Dinic, and Edmonds-Karp solvers
-│   ├── graph_cut_seam.hpp      # s-t network construction & min-cut seam extraction
-│   ├── seam_carver.hpp         # Seam carving orchestrator and JSON exporter
-│   ├── benchmark.hpp           # Solver benchmarking & comparison harness
-│   └── third_party/
-│       ├── stb_image.h         # Header-only image loader
-│       └── stb_image_write.h   # Header-only image writer
-├── src/
-│   ├── image.cpp
-│   ├── energy.cpp
-│   ├── graph.cpp
-│   ├── maxflow.cpp
-│   ├── graph_cut_seam.cpp
-│   ├── seam_carver.cpp
-│   ├── benchmark.cpp
-│   └── main.cpp                # CLI application
-└── tests/
-    └── test_graph_cut.cpp      # C++ unit test suite verifying cut validity & solvers
+|-- Makefile                    # GNU Makefile (g++ -O3 -std=c++17)
+|-- .gitignore                  # Excludes binaries, build objects, and outputs
+|-- .github/workflows/
+|   `-- ci.yml                  # GitHub Actions CI/CD (build, test, smoke test, releases)
+|-- bonus/                      # Bonus features (Item 7)
+|   |-- app.py                  # Streamlit interactive web application
+|   |-- carver.py               # Python wrapper executing bin/seam_carve
+|   |-- make_sample.py          # Synthetic test image generator
+|   |-- README.md               # Bonus module documentation & instructions
+|   |-- requirements.txt        # Python dependencies (streamlit, pillow, numpy, pytest)
+|   |-- visualize.py            # Step-by-step seam replay, GIF, overlay, comparison
+|   `-- tests/                  # Pytest suite (29 tests)
+|       |-- conftest.py
+|       `-- test_visualize.py   # Seam validation, replay, pixel-exact match tests
+|-- samples/
+|   `-- synthetic_tower.png     # Benchmark test image
+|-- include/
+|   |-- image.hpp               # Image container, pixel access, transpose, seam removal
+|   |-- energy.hpp              # Dual-gradient & Sobel filter gradient calculations
+|   |-- graph.hpp               # Adjacency list representation with residual capacities
+|   |-- maxflow.hpp             # Abstract MaxFlowSolver, Dinic, and Edmonds-Karp solvers
+|   |-- graph_cut_seam.hpp      # s-t network construction & min-cut seam extraction
+|   |-- seam_carver.hpp         # Seam carving orchestrator and JSON exporter
+|   |-- benchmark.hpp           # Solver benchmarking & comparison harness
+|   `-- third_party/
+|       |-- stb_image.h         # Header-only image loader
+|       `-- stb_image_write.h   # Header-only image writer
+|-- src/
+|   |-- image.cpp
+|   |-- energy.cpp
+|   |-- graph.cpp
+|   |-- maxflow.cpp
+|   |-- graph_cut_seam.cpp
+|   |-- seam_carver.cpp
+|   |-- benchmark.cpp
+|   `-- main.cpp                # CLI application
+`-- tests/
+    `-- test_graph_cut.cpp      # C++ unit test suite verifying cut validity & solvers
 ```
 
 ---
@@ -244,16 +245,16 @@ Options:
 | **Grid Graph Scaling** | High redundant BFS passes as paths saturate | Rapid multi-path saturation in single DFS phase |
 | **Space Complexity** | $O(V + E)$ (parent pointers) | $O(V + E)$ (levels + work pointers) |
 
-### Empirical Benchmark Run (80×60 Textured Image)
+### Empirical Benchmark Run (80x60 Textured Image)
 Testing 3 vertical seams followed by 2 horizontal seams under identical graph conditions:
 
 | Seam # | Dir | Size | Dinic Energy | EK Energy | Match? | Dinic (ms) | EK (ms) | Dinic BFS | EK BFS | Speedup |
 |---|---|---|---|---|---|---|---|---|---|---|
-| 1 | V | 80×60 | 3061.68 | 3061.68 | **YES** | 3.07 | 6.88 | 31 | 153 | **2.24x** |
-| 2 | V | 79×60 | 3158.94 | 3158.94 | **YES** | 3.90 | 6.96 | 38 | 172 | **1.78x** |
-| 3 | V | 78×60 | 3252.63 | 3252.63 | **YES** | 3.60 | 7.75 | 38 | 184 | **2.15x** |
-| 4 | H | 77×60 | 5941.79 | 5941.79 | **YES** | 4.34 | 13.10 | 43 | 320 | **3.02x** |
-| 5 | H | 77×59 | 5928.85 | 5928.85 | **YES** | 4.28 | 12.95 | 42 | 329 | **3.03x** |
+| 1 | V | 80x60 | 3061.68 | 3061.68 | **YES** | 3.07 | 6.88 | 31 | 153 | **2.24x** |
+| 2 | V | 79x60 | 3158.94 | 3158.94 | **YES** | 3.90 | 6.96 | 38 | 172 | **1.78x** |
+| 3 | V | 78x60 | 3252.63 | 3252.63 | **YES** | 3.60 | 7.75 | 38 | 184 | **2.15x** |
+| 4 | H | 77x60 | 5941.79 | 5941.79 | **YES** | 4.34 | 13.10 | 43 | 320 | **3.02x** |
+| 5 | H | 77x59 | 5928.85 | 5928.85 | **YES** | 4.28 | 12.95 | 42 | 329 | **3.03x** |
 
 - **Cumulative Dinic Time**: `19.19 ms`
 - **Cumulative Edmonds-Karp Time**: `47.63 ms`
@@ -381,3 +382,9 @@ seam_carving::SeamResult result = seam_carving::GraphCutSeamFinder::find_vertica
 // result.energy_sum contains the cut capacity
 img.remove_vertical_seam(result.seam);
 ```
+
+---
+
+## AI Usage Declaration
+
+Charity (`t-charity`) used **Claude** (Anthropic), via **Claude Code** (model: Claude Opus 5.5), to help with the bonus features (Item 7).
