@@ -1,38 +1,77 @@
-# Seam Carving via Graph Cut (Min-Cut / Max-Flow)
+# Content-Aware Image Resizing (Seam Carving)
+A C++17 implementation of Dynamic Programming, Greedy, and Graph Cut (Min-Cut / Max-Flow) Solvers.
 
-A C++17 implementation of **Content-Aware Image Resizing (Seam Carving)** formulated as a **Minimum $s-t$ Cut** problem and solved via **Maximum Flow Algorithms** (Dinic's Algorithm and Edmonds-Karp).
+This repository provides a modular, high-performance content-aware image resizing suite implementing three core seam-finding paradigms:
+1. **Dynamic Programming (DP)**: Globally optimal seam selection via cumulative energy memoization ($O(W \cdot H)$).
+2. **Greedy Algorithm**: Fast, local row-by-row minimum-energy decision heuristic ($O(H)$).
+3. **Graph Cut (Min-Cut / Max-Flow)**: Seam finding reformulated as a minimum $s-t$ cut and solved via Dinic's Algorithm ($O(V^2 E)$) and Edmonds-Karp ($O(V E^2)$).
 
-Developed for **CSD3130 Assignment 2**, targeted to build and run seamlessly under **WSL (Windows Subsystem for Linux)** with the **GNU toolchain** (`g++`, `make`). Uses embedded `stb_image` and `stb_image_write` for self-contained image loading and saving without external package dependencies.
-
+Targeted to build and run seamlessly under **WSL (Windows Subsystem for Linux)** with the **GNU toolchain** (`g++`, `make`). Uses embedded `stb_image` and `stb_image_write` for self-contained image loading and saving without external package dependencies.
 ---
 
 ## Table of Contents
-1. [Theoretical Formulation](#theoretical-formulation)
-2. [Supported Solvers](#supported-solvers)
+1. [Algorithm Implementation Matrix](#algorithm-implementation-matrix)
+2. [Theoretical Formulations](#theoretical-formulations)
+   - [2.1 Dynamic Programming](#21-dynamic-programming)
+   - [2.2 Greedy Algorithm](#22-greedy-algorithm)
+   - [2.3 Graph Cut (Min-Cut / Max-Flow)](#23-graph-cut-min-cut--max-flow)
 3. [Project Structure](#project-structure)
 4. [Building & Testing](#building--testing)
 5. [CLI Usage & Options](#cli-usage--options)
 6. [Benchmarking & Complexity Analysis](#benchmarking--complexity-analysis)
+   - [Theoretical Complexity Comparison](#theoretical-complexity-comparison)
+   - [Empirical Benchmark Run](#empirical-benchmark-run-8060-textured-image)
+   - [Performance & Memory Optimizations](#performance--memory-optimizations)
 7. [Bonus Features](#bonus-features)
    - [7a. Step-by-Step Visualizer](#7a-step-by-step-visualizer)
    - [7b. Interactive Web Application](#7b-interactive-web-application)
    - [7c. CI/CD & Automated Releases](#7c-cicd--automated-releases)
-   - [Seam Export Format & Extensibility](#seam-export-format--extensibility)
+   - [Standardized Seam Export JSON Format](#standardized-seam-export-json-format)
    - [Programmatic C++ API](#programmatic-c-api)
 8. [AI Usage Declaration](#ai-usage-declaration)
 
 ---
 
-## Theoretical Formulation
+## Algorithm Implementation Matrix
+
+| Paradigm | Component | Source Location | Description |
+|---|---|---|---|
+| **Dynamic Programming** | `DPSeamFinder` | [`include/dp_seam.hpp`](include/dp_seam.hpp)<br>[`src/dp_seam.cpp`](src/dp_seam.cpp) | Bottom-up 2D cumulative energy table $M(i, j)$, backtracking, transposition for horizontal seams. |
+| **Greedy Search** | `GreedySeamFinder` | [`include/greedy_seam.hpp`](include/greedy_seam.hpp)<br>[`src/greedy_seam.cpp`](src/greedy_seam.cpp) | Local step heuristic selecting the minimum-energy neighbor at each row. |
+| **Graph Cut (Dinic)** | `GraphCutSeamFinder`<br>`DinicSolver` | [`include/graph_cut_seam.hpp`](include/graph_cut_seam.hpp)<br>[`src/maxflow.cpp`](src/maxflow.cpp) | Layered level graph BFS + blocking flow DFS on $s-t$ flow network. |
+| **Graph Cut (Edmonds-Karp)** | `GraphCutSeamFinder`<br>`EdmondsKarpSolver` | [`include/graph_cut_seam.hpp`](include/graph_cut_seam.hpp)<br>[`src/maxflow.cpp`](src/maxflow.cpp) | Shortest augmenting path BFS on residual network. |
+| **Visualizer & Replay** | Python Replay Engine | [`bonus/visualize.py`](bonus/visualize.py) | Seam validation, animated GIF replay, overlay diagrams, comparison panels. |
+| **Interactive App** | Streamlit Web UI | [`bonus/app.py`](bonus/app.py) | Interactive image upload, parameter tuning, live carving, and scrubber. |
+| **CI/CD Pipeline** | GitHub Actions | [`.github/workflows/ci.yml`](.github/workflows/ci.yml) | Automated build, C++ test suite, Python test suite, smoke test, and release tagging. |
+
+---
+
+## Theoretical Formulations
+
+Seam carving resizes an image by iteratively finding and removing connected paths of pixels (seams) having the lowest cumulative disruption (energy).
+
+### 2.1 Dynamic Programming
+
+TODO
+
+---
+
+### 2.2 Greedy Algorithm
+
+TODO
+
+---
+
+### 2.3 Graph Cut (Min-Cut / Max-Flow)
 
 Seam finding is reformulated as finding a **minimum $s-t$ cut** in a directed flow network $G = (V, E)$.
 
-### 1. Graph Topology (Vertical Seams)
+#### 1. Graph Topology (Vertical Seams)
 For an image of size $H \times W$:
 - **Vertices**:
   - Source node $S = 0$
   - Sink node $T = H \times W + 1$
-  - One vertex per pixel: $v_{r, c} = 1 + r \times W + c$ for $0 \le r < H$, $0 \le c < W$.
+  - Pixel vertex: $v_{r, c} = 1 + r \times W + c$ for $0 \le r < H$, $0 \le c < W$.
   - Total vertices: $|V| = H \cdot W + 2$.
 
 - **Edges & Capacities**:
@@ -62,73 +101,72 @@ For an image of size $H \times W$:
          Sink (T)
 ```
 
-### 2. Proof of Correctness
+#### 2. Proof of Correctness
 - **Monotonicity (Exactly 1 pixel per row)**: The backward edge $(r, c + 1) \to (r, c)$ has infinite capacity. Any finite cut cannot leave $(r, c + 1) \in S_{cut}$ and $(r, c) \in T_{cut}$. Thus, in each row $r$, there is a unique transition column $c_r$ where all pixels $\le c_r$ belong to $S_{cut}$ and all pixels $> c_r$ belong to $T_{cut}$.
 - **8-Connected Continuity ($|c_r - c_{r\pm 1}| \le 1$)**: The diagonal edges $(r, c) \to (r - 1, c - 1)$ and $(r, c) \to (r + 1, c - 1)$ have infinite capacity. If row $r$ cuts at $c_r$, then $(r, c_r) \in S_{cut}$. To avoid cutting an infinite edge, $(r - 1, c_r - 1)$ and $(r + 1, c_r - 1)$ must also belong to $S_{cut}$. This guarantees $c_{r\pm 1} \ge c_r - 1$, i.e., $c_r - c_{r\pm 1} \le 1$. By adjacent row symmetry, $|c_r - c_{r\pm 1}| \le 1$.
 - **Min-Cut = Minimum Seam Energy**: The capacity of this cut is $\sum_{r=0}^{H-1} e(r, c_r)$. By the Max-Flow Min-Cut Theorem, the maximum flow from $S$ to $T$ equals the minimum cut capacity, yielding the globally optimal seam.
 
-### 3. Horizontal Seams
-Horizontal seams are solved seamlessly on the transposed image matrix and mapped back to preserve identical mathematical guarantees.
-
----
-
-## Supported Solvers
-
-The system provides two interchangeable max-flow algorithms through a unified interface (`MaxFlowSolver`):
-
-1. **Without Dinic (Edmonds-Karp)**:
+#### 3. Supported Max-Flow Solvers
+1. **Edmonds-Karp (Without Dinic)**:
    - Uses Breadth-First Search (BFS) to find the shortest augmenting path in the residual graph.
    - Theoretical Complexity: $O(V E^2)$.
-   - Serves as the textbook baseline explicitly requested in Assignment 2.
-
-2. **With Dinic (Dinic's Algorithm)**:
+   - Serves as the classic textbook baseline.
+2. **Dinic's Algorithm (With Dinic)**:
    - Constructs a layered level graph via BFS, then uses Depth-First Search (DFS) with current-arc pointer optimization to push blocking flows.
    - Theoretical Complexity: $O(V^2 E)$.
-   - Significantly reduces augmenting rounds on dense grid networks, delivering practical high-throughput performance.
+   - Delivers substantial practical speedups on grid networks.
 
 ---
 
 ## Project Structure
 
 ```
-|-- Makefile                    # GNU Makefile (g++ -O3 -std=c++17)
-|-- .gitignore                  # Excludes binaries, build objects, and outputs
-|-- .github/workflows/
-|   `-- ci.yml                  # GitHub Actions CI/CD (build, test, smoke test, releases)
-|-- bonus/                      # Bonus features (Item 7)
-|   |-- app.py                  # Streamlit interactive web application
-|   |-- carver.py               # Python wrapper executing bin/seam_carve
-|   |-- make_sample.py          # Synthetic test image generator
-|   |-- README.md               # Bonus module documentation & instructions
-|   |-- requirements.txt        # Python dependencies (streamlit, pillow, numpy, pytest)
-|   |-- visualize.py            # Step-by-step seam replay, GIF, overlay, comparison
-|   `-- tests/                  # Pytest suite (29 tests)
-|       |-- conftest.py
-|       `-- test_visualize.py   # Seam validation, replay, pixel-exact match tests
-|-- samples/
-|   `-- synthetic_tower.png     # Benchmark test image
-|-- include/
-|   |-- image.hpp               # Image container, pixel access, transpose, seam removal
-|   |-- energy.hpp              # Dual-gradient & Sobel filter gradient calculations
-|   |-- graph.hpp               # Adjacency list representation with residual capacities
-|   |-- maxflow.hpp             # Abstract MaxFlowSolver, Dinic, and Edmonds-Karp solvers
-|   |-- graph_cut_seam.hpp      # s-t network construction & min-cut seam extraction
-|   |-- seam_carver.hpp         # Seam carving orchestrator and JSON exporter
-|   |-- benchmark.hpp           # Solver benchmarking & comparison harness
-|   `-- third_party/
-|       |-- stb_image.h         # Header-only image loader
-|       `-- stb_image_write.h   # Header-only image writer
-|-- src/
-|   |-- image.cpp
-|   |-- energy.cpp
-|   |-- graph.cpp
-|   |-- maxflow.cpp
-|   |-- graph_cut_seam.cpp
-|   |-- seam_carver.cpp
-|   |-- benchmark.cpp
-|   `-- main.cpp                # CLI application
-`-- tests/
-    `-- test_graph_cut.cpp      # C++ unit test suite verifying cut validity & solvers
+├── Makefile                    # GNU Makefile (g++ -O3 -std=c++17)
+├── CONTRIBUTING.md             # Developer onboarding guide & API contracts
+├── README.md                   # Project documentation & architecture overview
+├── .gitignore                  # Excludes binaries, build objects, and outputs
+├── .github/workflows/
+│   └── ci.yml                  # GitHub Actions CI/CD (build, test, smoke test, releases)
+├── bonus/                      # Bonus features
+│   ├── app.py                  # Streamlit interactive web application
+│   ├── carver.py               # Python wrapper executing bin/seam_carve
+│   ├── make_sample.py          # Synthetic test image generator
+│   ├── README.md               # Bonus module documentation & instructions
+│   ├── requirements.txt        # Python dependencies (streamlit, pillow, numpy, pytest)
+│   ├── visualize.py            # Step-by-step seam replay, GIF, overlay, comparison
+│   └── tests/                  # Pytest suite (29 tests)
+│       ├── conftest.py
+│       └── test_visualize.py   # Seam validation, replay, pixel-exact match tests
+├── samples/
+│   └── synthetic_tower.png     # Benchmark test image
+├── include/
+│   ├── image.hpp               # Image container, pixel access, transpose, seam removal
+│   ├── energy.hpp              # Dual-gradient & Sobel filter gradient calculations
+│   ├── graph.hpp               # Adjacency list representation with residual capacities
+│   ├── maxflow.hpp             # Abstract MaxFlowSolver, Dinic, and Edmonds-Karp solvers
+│   ├── graph_cut_seam.hpp      # s-t network construction & min-cut seam extraction
+│   ├── dp_seam.hpp             # DP Seam Finder header
+│   ├── greedy_seam.hpp         # Greedy Seam Finder header
+│   ├── seam_carver.hpp         # Seam carving orchestrator and JSON exporter
+│   ├── benchmark.hpp           # Solver benchmarking & comparison harness
+│   └── third_party/
+│       ├── stb_image.h         # Header-only image loader
+│       └── stb_image_write.h   # Header-only image writer
+├── src/
+│   ├── image.cpp
+│   ├── energy.cpp
+│   ├── graph.cpp
+│   ├── maxflow.cpp
+│   ├── graph_cut_seam.cpp
+│   ├── dp_seam.cpp             # DP Seam Finder implementation
+│   ├── greedy_seam.cpp         # Greedy Seam Finder implementation
+│   ├── seam_carver.cpp
+│   ├── benchmark.cpp
+│   └── main.cpp                # CLI application
+└── tests/
+    ├── test_graph_cut.cpp      # Graph Cut unit test suite
+    ├── test_dp.cpp             # DP unit test suite
+    └── test_greedy.cpp         # Greedy unit test suite
 ```
 
 ---
@@ -149,17 +187,17 @@ sudo apt install build-essential
 # Build the main CLI executable (bin/seam_carve)
 make all
 
-# Build and execute C++ unit tests (bin/test_graph_cut)
+# Build and execute unit tests
 make test
 
 # Clean build artifacts
 make clean
 ```
 
-All 7 C++ unit tests verify:
+The C++ unit tests verify:
 - Known global minimum cut on synthetic grids.
 - Boundary edge conditions (leftmost and rightmost columns).
-- Prevention of jump discontinuities ($|c_r - c_{r+1}| > 1$).
+- Prevention of jump discontinuities ($|c_r - c_{r\pm 1}| > 1$).
 - Horizontal seam extraction via transposition.
 - Energy equivalence and non-zero flow across both Dinic and Edmonds-Karp.
 
@@ -228,7 +266,7 @@ Options:
 ./bin/seam_carve -i input.jpg --remove-cols 5 --remove-rows 5 --compare --export-csv benchmark.csv
 ```
 
-#### 4. Export Seam Data for Visualizer Teammate
+#### 4. Export Seam Data for Visualizer
 ```bash
 ./bin/seam_carve -i input.jpg -o out.jpg --remove-cols 30 --export-seams seams.json
 ```
@@ -238,12 +276,12 @@ Options:
 ## Benchmarking & Complexity Analysis
 
 ### Theoretical Complexity Comparison
-| Metric | Edmonds-Karp (Without Dinic) | Dinic's Algorithm (With Dinic) |
-|---|---|---|
-| **Augmentation Strategy** | Single shortest path per BFS | Layered level graph BFS + blocking flow DFS |
-| **Time Complexity** | $O(V E^2)$ | $O(V^2 E)$ |
-| **Grid Graph Scaling** | High redundant BFS passes as paths saturate | Rapid multi-path saturation in single DFS phase |
-| **Space Complexity** | $O(V + E)$ (parent pointers) | $O(V + E)$ (levels + work pointers) |
+| Metric | Greedy Algorithm | Dynamic Programming | Edmonds-Karp (Graph Cut) | Dinic's Algorithm (Graph Cut) |
+|---|---|---|---|---|
+| **Optimality Guarantee** | None (Local Minima) | **Global Minimum** | **Global Minimum** | **Global Minimum** |
+| **Augmentation / Search Strategy** | Local 3-pixel minimum per row | Cumulative 2D energy table + backtrack | Single shortest path BFS | Layered graph BFS + blocking flow DFS |
+| **Time Complexity (per seam)** | $O(W \cdot H)$ energy + $O(H)$ seam | $O(W \cdot H)$ | $O(V E^2)$ where $\|V\| \approx WH$ | $O(V^2 E)$ where $\|V\| \approx WH$ |
+| **Space Complexity** | $O(1)$ extra space | $O(W \cdot H)$ table ($O(W)$ if value only) | $O(V + E)$ residual graph | $O(V + E)$ residual graph + levels |
 
 ### Empirical Benchmark Run (80x60 Textured Image)
 Testing 3 vertical seams followed by 2 horizontal seams under identical graph conditions:
@@ -261,8 +299,6 @@ Testing 3 vertical seams followed by 2 horizontal seams under identical graph co
 - **Overall Speedup**: **`2.48x`**
 - **Optimality Verification**: Dinic and Edmonds-Karp produce **100% identical cut energies** across every single carved seam.
 
----
-
 ## Bonus Features
 
 | Bonus | What | Implementation |
@@ -271,7 +307,7 @@ Testing 3 vertical seams followed by 2 horizontal seams under identical graph co
 | **7b. User Interaction** | Streamlit web application: upload image, adjust target dimensions, choose solver/energy, carve, and scrub through intermediate steps | [`bonus/app.py`](bonus/app.py) |
 | **7c. CI/CD & Releases** | Automated GitHub Actions workflow: C++ build & tests, Python test suite, Streamlit smoke test, demo artifacts, and tag-triggered GitHub Releases | [`.github/workflows/ci.yml`](.github/workflows/ci.yml) |
 
-> **Design Note:** The bonus layer never reimplements seam finding. Every seam originates from the C++ graph-cut engine via `--export-seams` JSON. The Python suite simply replays, validates, and renders the result. A test verifies that the Python replay matches the C++ output **pixel for pixel**.
+> **Design Note:** The bonus layer never reimplements seam finding. Every seam originates from the C++ engine via `--export-seams` JSON. The Python suite simply replays, validates, and renders the result. A test verifies that the Python replay matches the C++ output **pixel for pixel**.
 
 ---
 
@@ -301,10 +337,10 @@ python bonus/visualize.py --image samples/synthetic_tower.png --seams seams.json
 
 ### 7b. Interactive Web Application
 
-An interactive web application built with [Streamlit](https://streamlit.io/) provides hands-on exploration of graph-cut seam carving:
+An interactive web application built with [Streamlit](https://streamlit.io/) provides hands-on exploration of seam carving:
 
 - **Live Carving**: Choose from built-in samples or upload custom images.
-- **Configurable Parameters**: Adjust columns/rows to remove, max-flow solver (`dinic` vs. `edmonds_karp`), and gradient metric (`dual` vs. `sobel`).
+- **Configurable Parameters**: Adjust columns/rows to remove, algorithm solver, and gradient metric.
 - **Interactive Scrubber**: After carving, scrub smoothly through every intermediate image size without re-running flow computations, replaying saved seam records on demand.
 - **Execution Diagnostics**: Displays wall-clock runtime, max-flow values, and step breakdown logs.
 
@@ -328,7 +364,7 @@ The repository includes a production-grade GitHub Actions pipeline ([`.github/wo
 
 ---
 
-### Seam Export Format & Extensibility
+### Standardized Seam Export JSON Format
 
 The C++ binary and Python visualization layer communicate via a standardized, decoupled JSON interface (`--export-seams`):
 
