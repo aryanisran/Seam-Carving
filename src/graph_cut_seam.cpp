@@ -22,6 +22,14 @@ void GraphCutSeamFinder::build_vertical_graph(const EnergyMap& energy, FlowGraph
     sink = h * w + 1;
     graph.reset(h * w + 2);
 
+    graph.reserve_vertex(source, static_cast<std::size_t>(h));
+    graph.reserve_vertex(sink, static_cast<std::size_t>(h));
+    for (int r = 0; r < h; ++r) {
+        for (int c = 0; c < w; ++c) {
+            graph.reserve_vertex(pixel_node(r, c, w), 6);
+        }
+    }
+
     for (int r = 0; r < h; ++r) {
         // Connect source to first column with infinite capacity
         graph.add_edge(source, pixel_node(r, 0, w), INF_CAP);
@@ -33,9 +41,8 @@ void GraphCutSeamFinder::build_vertical_graph(const EnergyMap& energy, FlowGraph
             int u = pixel_node(r, c, w);
             int v = pixel_node(r, c + 1, w);
             // Forward edge capacity = cost of removing pixel (r, c)
-            graph.add_edge(u, v, energy.at(r, c));
             // Backward infinite-capacity edge ensures monotonicity (1 pixel per row)
-            graph.add_edge(v, u, INF_CAP);
+            graph.add_edge(u, v, energy.at(r, c), INF_CAP);
         }
 
         // Diagonal infinite-capacity edges enforce 8-connected seam constraint |c_r - c_{r+-1}| <= 1

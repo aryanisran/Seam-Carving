@@ -18,9 +18,9 @@ void FlowGraph::reset_flows() {
     }
 }
 
-void FlowGraph::add_edge(int u, int v, double cap) {
+void FlowGraph::add_edge(int u, int v, double cap, double rev_cap) {
     Edge fwd{v, static_cast<int>(adj_[v].size()), cap, 0.0};
-    Edge bwd{u, static_cast<int>(adj_[u].size()), 0.0, 0.0};
+    Edge bwd{u, static_cast<int>(adj_[u].size()), rev_cap, 0.0};
     adj_[u].push_back(fwd);
     adj_[v].push_back(bwd);
     ++edge_count_;

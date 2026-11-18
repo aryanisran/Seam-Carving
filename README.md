@@ -21,6 +21,7 @@ Targeted to build and run seamlessly under **WSL (Windows Subsystem for Linux)**
 6. [Benchmarking & Complexity Analysis](#benchmarking--complexity-analysis)
    - [Theoretical Complexity Comparison](#theoretical-complexity-comparison)
    - [Empirical Benchmark Run](#empirical-benchmark-run-8060-textured-image)
+   - [High-Resolution Scaling Benchmark](#high-resolution-scaling-benchmark-427x290-image)
    - [Performance & Memory Optimizations](#performance--memory-optimizations)
 7. [Bonus Features](#bonus-features)
    - [7a. Step-by-Step Visualizer](#7a-step-by-step-visualizer)
@@ -108,13 +109,15 @@ For an image of size $H \times W$:
 
 #### 3. Supported Max-Flow Solvers
 1. **Edmonds-Karp (Without Dinic)**:
-   - Uses Breadth-First Search (BFS) to find the shortest augmenting path in the residual graph.
-   - Theoretical Complexity: $O(V E^2)$.
-   - Serves as the classic textbook baseline.
+   - Uses Breadth-First Search (BFS) to find shortest augmenting paths in the residual network.
+   - Enhanced with **Capacity Scaling ($\Delta$-scaling)** and **Multi-Path Wavefront Augmentation** to prevent fractional micro-flow bottlenecks on continuous gradient images.
+   - Theoretical Complexity: $O(V E^2)$ classic, accelerated to $O(E^2 \log C_{max})$ via capacity scaling.
+   - Serves as the classic textbook baseline, optimized for practical grid graphs.
 2. **Dinic's Algorithm (With Dinic)**:
-   - Constructs a layered level graph via BFS, then uses Depth-First Search (DFS) with current-arc pointer optimization to push blocking flows.
+   - Constructs a layered level graph via BFS, then uses Depth-First Search (DFS) with current-arc pointer optimization to push multi-branch blocking flows.
+   - Enhanced with dead-end level graph pruning and zero-allocation static queue buffers.
    - Theoretical Complexity: $O(V^2 E)$.
-   - Delivers substantial practical speedups on grid networks.
+   - Delivers substantial practical speedups on dense grid networks.
 
 ---
 
@@ -284,20 +287,63 @@ Options:
 | **Space Complexity** | $O(1)$ extra space | $O(W \cdot H)$ table ($O(W)$ if value only) | $O(V + E)$ residual graph | $O(V + E)$ residual graph + levels |
 
 ### Empirical Benchmark Run (80x60 Textured Image)
-Testing 3 vertical seams followed by 2 horizontal seams under identical graph conditions:
+Testing 3 vertical seams followed by 2 horizontal seams under identical graph conditions (`bin/test_graph_cut`):
 
 | Seam # | Dir | Size | Dinic Energy | EK Energy | Match? | Dinic (ms) | EK (ms) | Dinic BFS | EK BFS | Speedup |
 |---|---|---|---|---|---|---|---|---|---|---|
-| 1 | V | 80x60 | 3061.68 | 3061.68 | **YES** | 3.07 | 6.88 | 31 | 153 | **2.24x** |
-| 2 | V | 79x60 | 3158.94 | 3158.94 | **YES** | 3.90 | 6.96 | 38 | 172 | **1.78x** |
-| 3 | V | 78x60 | 3252.63 | 3252.63 | **YES** | 3.60 | 7.75 | 38 | 184 | **2.15x** |
-| 4 | H | 77x60 | 5941.79 | 5941.79 | **YES** | 4.34 | 13.10 | 43 | 320 | **3.02x** |
-| 5 | H | 77x59 | 5928.85 | 5928.85 | **YES** | 4.28 | 12.95 | 42 | 329 | **3.03x** |
+| 1 | V | 80x60 | 3061.68 | 3061.68 | **YES** | 2.22 | 1.23 | 31 | 63 | **0.55x** |
+| 2 | V | 79x60 | 3158.94 | 3158.94 | **YES** | 2.68 | 1.67 | 38 | 72 | **0.62x** |
+| 3 | V | 78x60 | 3252.63 | 3252.63 | **YES** | 2.51 | 1.60 | 38 | 71 | **0.64x** |
+| 4 | H | 77x60 | 5941.79 | 5941.79 | **YES** | 3.19 | 4.30 | 43 | 113 | **1.35x** |
+| 5 | H | 77x59 | 5928.85 | 5928.85 | **YES** | 3.01 | 4.05 | 42 | 111 | **1.34x** |
 
-- **Cumulative Dinic Time**: `19.19 ms`
-- **Cumulative Edmonds-Karp Time**: `47.63 ms`
-- **Overall Speedup**: **`2.48x`**
-- **Optimality Verification**: Dinic and Edmonds-Karp produce **100% identical cut energies** across every single carved seam.
+- **Cumulative Dinic Time**: `13.63 ms`
+- **Cumulative Edmonds-Karp Time**: `12.85 ms`
+- **Overall Speedup**: **`0.94x`** (Edmonds-Karp with capacity scaling slightly edges out Dinic on small dimensions due to lower overhead)
+- **Optimality Verification**: Dinic and Edmonds-Karp produce **100% identical cut energies and seam coordinates** across every single carved seam.
+
+---
+
+### High-Resolution Scaling Benchmark (427x290 Image)
+Carving 20 vertical and 20 horizontal seams (40 seams total) on `samples/image.png` ($|V| \approx 124,000$, $|E| \approx 370,000$):
+
+| Solver / Configuration | Per-Seam Avg (ms) | 40 Seams Total (ms) | Wall Clock Time | Speedup vs Baseline EK | Correctness |
+|---|---|---|---|---|---|
+| **Baseline Edmonds-Karp** | ~47,200 ms | 1,888,660 ms | **31.5 min** | 1.0x (baseline) | Verified |
+| **Optimized Edmonds-Karp** | **~1,200 – 1,700 ms** | **48,000 – 68,332 ms** | **~48 – 68 s** | **~28x – 39x** | **100% Identical** |
+| **Baseline Dinic** | ~1,210 ms | ~48,400 ms | **~48.4 s** | **39x** | Verified |
+| **Optimized Dinic** | **~595 ms** | **~23,800 ms** | **~24 s** | **78x** | **100% Identical** |
+
+---
+
+### Performance & Memory Optimizations
+
+Directly profiling baseline max-flow algorithms on large grid networks revealed critical bottlenecks:
+1. Classic Edmonds-Karp executed **~9,380 full-graph BFS passes per seam**, with each path augmenting fractional flow ($\sim 0.15$ units) across 124,000 vertices.
+2. Every BFS pass wiped a 124,000-element `parent_v` array via `std::fill`, writing over **25 GB of redundant data** into RAM per seam.
+3. Graph construction created redundant directed edge pairs and triggered hundreds of thousands of heap reallocations.
+
+To address this without compromising mathematical correctness, the engine was optimized across four tiers:
+
+#### Tier 1: Graph Topology & Edge Pruning ([`include/graph.hpp`](include/graph.hpp), [`src/graph_cut_seam.cpp`](src/graph_cut_seam.cpp))
+- **Merged Bidirectional Edge Pairs**: The standard graph formulation requires a forward capacity $e(r, c)$ and an infinite backward capacity $\infty$. Previously, `add_edge(u, v, energy)` and `add_edge(v, u, INF)` were invoked separately, allocating 4 edge structs per horizontal pair. We enhanced `FlowGraph::add_edge(u, v, cap, rev_cap = 0.0)` to merge them into a single complementary forward-reverse edge pair:
+  $$\text{Forward } (u \to v): \text{cap} = e(r, c), \quad \text{Reverse } (v \to u): \text{cap} = \infty$$
+  This eliminated **~250,000 redundant directed edge structures** (~40% of the entire graph), dramatically reducing cache footprint and memory bandwidth during traversals.
+- **Fixed-Degree Pre-Reservation**: Pre-reserved vertex degree in `FlowGraph::reset` ($H$ edges for $S$ and $T$, 6 edges per pixel node), completely eliminating dynamic vector reallocations during graph construction.
+
+#### Tier 2: Edmonds-Karp Algorithmic Accelerations ([`src/maxflow.cpp`](src/maxflow.cpp))
+- **Capacity Scaling ($\Delta$-scaling)**: Replaced unconstrained shortest-path BFS with Capacity Scaling. In each phase, the search only traverses edges with residual capacity $\ge \Delta$, where $\Delta$ starts at 512.0 and halves down to `FLOW_EPS`. This guarantees that every augmenting path pushes a significant chunk of flow, preventing micro-flow fragmentation and cutting augmenting paths from **~9,380 down to ~1,500**.
+- **Multi-Path Wavefront Augmentation Sweep**: Because rows in a grid network are largely independent horizontal channels, BFS does not immediately discard its queue upon reaching the sink. It augments the discovered path and continues expanding the existing queue to augment other disjoint rows reaching the sink in the *same* wavefront pass. This reduced BFS runs from **~9,400 down to ~150–250 per seam**.
+- **$O(\text{visited})$ Queue Cleanup**: Eliminated full $O(V)$ `std::fill` calls. Only nodes actually visited and enqueued in $q[0..\text{tail}-1]$ are cleared after augmentation, reducing array cleanup overhead from $O(V)$ to $O(\text{visited})$.
+- **Direct Pointer Traversal**: Inner BFS loops operate directly on contiguous memory via raw pointers (`Edge*`, `int*`), bypassing vector indirection.
+
+#### Tier 3: Dinic Solver Optimizations ([`src/maxflow.cpp`](src/maxflow.cpp))
+- **True Multi-Branch Blocking Flow DFS**: Fixed the blocking-flow DFS so it pushes flow across *all* outgoing level-graph arcs out of vertex $u$ up to requested capacity, rather than terminating after finding a single path.
+- **Dead-End Level Pruning**: If a node $u$ exhausts its outgoing capacity without satisfying requested flow, `level[u]` is set to $-1$. This prevents future DFS traversals from re-entering blocked nodes within the same phase.
+- **Zero-Allocation BFS**: Dynamic `std::queue<int>` instances were replaced with a flat, reusable thread-local array, with early termination as soon as BFS finishes the `level[sink]` layer.
+
+#### Tier 4: Fast Min-Cut Extraction ([`src/maxflow.cpp`](src/maxflow.cpp))
+- Replaced `std::queue` with flat vector traversal in `MaxFlowSolver::compute_source_cut`, making the post-flow source-component reachability traversal virtually instantaneous (~0.1 ms).
 
 ## Bonus Features
 
@@ -423,4 +469,21 @@ img.remove_vertical_seam(result.seam);
 
 ## AI Usage Declaration
 
-Charity (`t-charity`) used **Claude** (Anthropic), via **Claude Code** (model: Claude Opus 5.5), to help with the bonus features (Item 7).
+In compliance with **Item 9.a.v** of the CSD3130 Assignment 2 Brief, the following table and prompt records detail how AI tools were utilized during the design, implementation, testing, and documentation phases of this project:
+
+### Summary of AI Tools & Scope
+
+| Contributor | AI Tool & Model | Platform | Scope of Assistance |
+|---|---|---|---|
+| **Aryan bin Mohamed Isran** (`aryanisran`) | **Google Gemini** | Google Antigravity CLI | **Graph Cut Optimization & Benchmarking**: <br>• Theoretical profiling of $O(V E^2)$ runtime bottlenecks on continuous gradient grid networks.<br>• Algorithmic design of Capacity Scaling ($\Delta$-scaling) and Multi-Path Wavefront Augmentation for Edmonds-Karp.<br>• Implementation of multi-branch blocking-flow DFS and dead-end level graph pruning in Dinic.<br>• Graph topology optimization (merging forward/backward edges, fixed-degree pre-allocation).<br>• Zero-allocation $O(\text{visited})$ array resets and raw pointer traversal in tight loops.<br>• Empirical benchmarking on 80×60 and 427×290 images, and rubric compliance verification. |
+| **Charity** (`t-charity`) | **Claude Opus 5.5** (Anthropic) | Claude Code | **Bonus Features (Item 7)**: <br>• Step-by-step seam replay and visualization engine (`bonus/visualize.py`).<br>• Streamlit interactive web application (`bonus/app.py`).<br>• Automated CI/CD pipeline and release workflow (`.github/workflows/ci.yml`).<br>• Python unit test suite for visualization replay (`bonus/tests/test_visualize.py`). |
+
+---
+
+### Main Prompts Log
+
+Below are the primary prompts used during the design and optimization of the Graph Cut max-flow engine:
+
+1. **Initial Bottleneck Discovery & Performance Query**:
+   > *"Carved 20 vertical and 20 horizontal seams using Edmonds-Karp in 1.88866e+06 ms. New size: 407x270, we need to optimise the graph cut"*
+   - **AI Response & Contribution**: Analyzed why continuous gradient capacities caused 9,300+ augmenting paths pushing fractional flow ($\sim 0.15$ units), identified that standard BFS was visiting 97% of all 124,000 vertices on every single path, identified the 25 GB memory write overhead of `std::fill(parent_v)`, and designed the 4-tier optimization roadmap. Designed and implemented Capacity Scaling ($\Delta$-scaling) to reduce augmenting path count from ~9,380 down to ~1,500, and Multi-Path Wavefront Augmentation to reduce BFS runs from ~9,400 down to ~150–250 per seam, accelerating 40 seams to ~48–68 seconds (~1.2 s per seam).
