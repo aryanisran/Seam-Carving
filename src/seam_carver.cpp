@@ -1,12 +1,13 @@
 #include "seam_carver.hpp"
 
 #include <fstream>
+#include <memory>
 #include <stdexcept>
 
 namespace seam_carving {
 
-SeamCarver::SeamCarver(SolverType solver_type, EnergyMetric metric)
-    : solver_type_(solver_type), metric_(metric) {}
+SeamCarver::SeamCarver(SolverType solver_type, EnergyMetric metric, AlgorithmType algorithm)
+    : solver_type_(solver_type), metric_(metric), algorithm_(algorithm) {}
 
 void SeamCarver::carve_vertical_seams(Image& img, int count, std::vector<CarveRecord>* records) {
     if (count < 0) {
@@ -16,14 +17,32 @@ void SeamCarver::carve_vertical_seams(Image& img, int count, std::vector<CarveRe
         throw std::invalid_argument("Cannot remove >= image width vertical seams");
     }
 
-    auto solver = create_solver(solver_type_);
+    // Graph Cut needs a max-flow solver instance; DP and Greedy do not.
+    std::unique_ptr<MaxFlowSolver> solver;
+    if (algorithm_ == AlgorithmType::GraphCut) {
+        solver = create_solver(solver_type_);
+    }
+
     int start_step = records ? static_cast<int>(records->size()) + 1 : 1;
 
     for (int i = 0; i < count; ++i) {
         EnergyMap energy = compute_energy(img, metric_);
-        SeamResult res = GraphCutSeamFinder::find_vertical_seam(energy, *solver);
+
+        SeamResult res;
+        switch (algorithm_) {
+            case AlgorithmType::DynamicProgramming:
+                res = DPSeamFinder::find_vertical_seam(energy);
+                break;
+            case AlgorithmType::Greedy:
+                throw std::runtime_error("GreedySeamFinder is not implemented yet (Team C)");
+            case AlgorithmType::GraphCut:
+            default:
+                res = GraphCutSeamFinder::find_vertical_seam(energy, *solver);
+                break;
+        }
+
         if (!res.valid) {
-            throw std::runtime_error("GraphCutSeamFinder produced an invalid vertical seam");
+            throw std::runtime_error("Seam finder produced an invalid vertical seam");
         }
 
         if (records) {
@@ -50,14 +69,31 @@ void SeamCarver::carve_horizontal_seams(Image& img, int count, std::vector<Carve
         throw std::invalid_argument("Cannot remove >= image height horizontal seams");
     }
 
-    auto solver = create_solver(solver_type_);
+    std::unique_ptr<MaxFlowSolver> solver;
+    if (algorithm_ == AlgorithmType::GraphCut) {
+        solver = create_solver(solver_type_);
+    }
+
     int start_step = records ? static_cast<int>(records->size()) + 1 : 1;
 
     for (int i = 0; i < count; ++i) {
         EnergyMap energy = compute_energy(img, metric_);
-        SeamResult res = GraphCutSeamFinder::find_horizontal_seam(energy, *solver);
+
+        SeamResult res;
+        switch (algorithm_) {
+            case AlgorithmType::DynamicProgramming:
+                res = DPSeamFinder::find_horizontal_seam(energy);
+                break;
+            case AlgorithmType::Greedy:
+                throw std::runtime_error("GreedySeamFinder is not implemented yet (Team C)");
+            case AlgorithmType::GraphCut:
+            default:
+                res = GraphCutSeamFinder::find_horizontal_seam(energy, *solver);
+                break;
+        }
+
         if (!res.valid) {
-            throw std::runtime_error("GraphCutSeamFinder produced an invalid horizontal seam");
+            throw std::runtime_error("Seam finder produced an invalid horizontal seam");
         }
 
         if (records) {

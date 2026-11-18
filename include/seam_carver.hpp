@@ -1,6 +1,7 @@
 #ifndef GRAPH_CUT_SEAM_CARVER_HPP
 #define GRAPH_CUT_SEAM_CARVER_HPP
 
+#include "dp_seam.hpp"
 #include "energy.hpp"
 #include "graph_cut_seam.hpp"
 #include "image.hpp"
@@ -20,13 +21,25 @@ struct CarveRecord {
     MaxFlowStats stats;
 };
 
+// Which seam-finding algorithm SeamCarver should use. GraphCut is the default so all
+// existing call sites (Team B's code, the benchmark harness) keep behaving exactly as
+// before without passing this argument.
+enum class AlgorithmType {
+    GraphCut,
+    DynamicProgramming,
+    Greedy // reserved for Team C's GreedySeamFinder; selecting this currently throws.
+};
+
 class SeamCarver {
 public:
     SeamCarver(SolverType solver_type = SolverType::Dinic,
-               EnergyMetric metric = EnergyMetric::DualGradient);
+               EnergyMetric metric = EnergyMetric::DualGradient,
+               AlgorithmType algorithm = AlgorithmType::GraphCut);
 
     void set_solver(SolverType solver_type) { solver_type_ = solver_type; }
     void set_energy_metric(EnergyMetric metric) { metric_ = metric; }
+    void set_algorithm(AlgorithmType algorithm) { algorithm_ = algorithm; }
+    AlgorithmType algorithm() const { return algorithm_; }
 
     void carve_vertical_seams(Image& img, int count, std::vector<CarveRecord>* records = nullptr);
     void carve_horizontal_seams(Image& img, int count, std::vector<CarveRecord>* records = nullptr);
@@ -38,6 +51,7 @@ public:
 private:
     SolverType solver_type_;
     EnergyMetric metric_;
+    AlgorithmType algorithm_;
 };
 
 } // namespace seam_carving

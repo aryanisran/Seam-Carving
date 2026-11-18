@@ -23,12 +23,26 @@ void print_usage(const char* prog) {
               << "  --remove-rows <n>         Number of horizontal seams to remove (default: 0)\n"
               << "  --width <w>               Target width (overrides --remove-cols)\n"
               << "  --height <h>              Target height (overrides --remove-rows)\n"
-              << "  --solver <name>           Max-flow solver: 'dinic' (default) or 'edmonds_karp'\n"
+              << "  --algorithm <name>        Seam-finding algorithm: 'graph_cut' (default), 'dp', or 'greedy'\n"
+              << "  --solver <name>           Max-flow solver (only used by --algorithm graph_cut):\n"
+              << "                            'dinic' (default) or 'edmonds_karp'\n"
               << "  --energy <name>           Energy metric: 'dual' (default) or 'sobel'\n"
-              << "  --compare                 Run both Dinic and Edmonds-Karp and compare\n"
+              << "  --compare                 Run both Dinic and Edmonds-Karp and compare (graph_cut only)\n"
               << "  --export-csv <path>       Export --compare metrics to CSV\n"
               << "  --export-seams <path>     Export carved seam coordinates to JSON\n"
               << "  -h, --help                Show this help message\n";
+}
+
+std::string algorithm_label(AlgorithmType algorithm, SolverType solver_type) {
+    switch (algorithm) {
+        case AlgorithmType::DynamicProgramming:
+            return "Dynamic Programming";
+        case AlgorithmType::Greedy:
+            return "Greedy";
+        case AlgorithmType::GraphCut:
+        default:
+            return (solver_type == SolverType::Dinic) ? "Graph Cut (Dinic)" : "Graph Cut (Edmonds-Karp)";
+    }
 }
 
 } // namespace
@@ -46,6 +60,7 @@ int main(int argc, char* argv[]) {
     int target_height = -1;
     SolverType solver_type = SolverType::Dinic;
     EnergyMetric metric = EnergyMetric::DualGradient;
+    AlgorithmType algorithm = AlgorithmType::GraphCut;
     bool compare_mode = false;
 
     for (int i = 1; i < argc; ++i) {
@@ -65,6 +80,18 @@ int main(int argc, char* argv[]) {
             target_width = std::atoi(argv[++i]);
         } else if (arg == "--height" && i + 1 < argc) {
             target_height = std::atoi(argv[++i]);
+        } else if (arg == "--algorithm" && i + 1 < argc) {
+            std::string a = argv[++i];
+            if (a == "graph_cut" || a == "gc") {
+                algorithm = AlgorithmType::GraphCut;
+            } else if (a == "dp" || a == "dynamic_programming") {
+                algorithm = AlgorithmType::DynamicProgramming;
+            } else if (a == "greedy") {
+                algorithm = AlgorithmType::Greedy;
+            } else {
+                std::cerr << "Unknown algorithm: " << a << "\n";
+                return 1;
+            }
         } else if (arg == "--solver" && i + 1 < argc) {
             std::string s = argv[++i];
             if (s == "dinic") {
@@ -151,7 +178,7 @@ int main(int argc, char* argv[]) {
     }
 
     if (!output_path.empty() || !seams_json_path.empty() || (!compare_mode && (remove_cols > 0 || remove_rows > 0))) {
-        SeamCarver carver(solver_type, metric);
+        SeamCarver carver(solver_type, metric, algorithm);
         std::vector<CarveRecord> records;
 
         auto t0 = std::chrono::high_resolution_clock::now();
@@ -162,7 +189,7 @@ int main(int argc, char* argv[]) {
         double total_ms = std::chrono::duration<double, std::milli>(t1 - t0).count();
         std::cout << "Carved " << remove_cols << " vertical and " << remove_rows
                   << " horizontal seams using "
-                  << (solver_type == SolverType::Dinic ? "Dinic" : "Edmonds-Karp")
+                  << algorithm_label(algorithm, solver_type)
                   << " in " << total_ms << " ms. New size: "
                   << img.width() << "x" << img.height() << "\n";
 
