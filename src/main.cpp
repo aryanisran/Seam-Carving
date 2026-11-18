@@ -34,6 +34,8 @@ void print_usage(const char* prog) {
 } // namespace
 
 int main(int argc, char* argv[]) {
+    auto cli_start = std::chrono::high_resolution_clock::now();
+
     std::string input_path;
     std::string output_path;
     std::string csv_path;
@@ -102,13 +104,17 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
+    auto load_t0 = std::chrono::high_resolution_clock::now();
     Image img;
     if (!img.load_from_file(input_path)) {
         std::cerr << "Error: Failed to load image '" << input_path << "'.\n";
         return 1;
     }
+    auto load_t1 = std::chrono::high_resolution_clock::now();
+    double load_ms = std::chrono::duration<double, std::milli>(load_t1 - load_t0).count();
 
-    std::cout << "Loaded image '" << input_path << "' (" << img.width() << "x" << img.height() << ")\n";
+    std::cout << "Loaded image '" << input_path << "' (" << img.width() << "x" << img.height()
+              << ") in " << load_ms << " ms\n";
 
     if (target_width > 0) {
         remove_cols = img.width() - target_width;
@@ -127,8 +133,14 @@ int main(int argc, char* argv[]) {
     }
 
     if (compare_mode) {
+        auto comp_t0 = std::chrono::high_resolution_clock::now();
         ComparisonSummary summary = BenchmarkRunner::compare_solvers(img, remove_cols, remove_rows, metric);
+        auto comp_t1 = std::chrono::high_resolution_clock::now();
+        double comp_ms = std::chrono::duration<double, std::milli>(comp_t1 - comp_t0).count();
+
         BenchmarkRunner::print_table(summary);
+        std::cout << "Comparison finished in " << comp_ms << " ms.\n";
+
         if (!csv_path.empty()) {
             if (BenchmarkRunner::export_csv(csv_path, summary)) {
                 std::cout << "Exported comparison CSV to '" << csv_path << "'.\n";
@@ -138,7 +150,7 @@ int main(int argc, char* argv[]) {
         }
     }
 
-    if (!output_path.empty() || !seams_json_path.empty()) {
+    if (!output_path.empty() || !seams_json_path.empty() || (!compare_mode && (remove_cols > 0 || remove_rows > 0))) {
         SeamCarver carver(solver_type, metric);
         std::vector<CarveRecord> records;
 
@@ -155,8 +167,12 @@ int main(int argc, char* argv[]) {
                   << img.width() << "x" << img.height() << "\n";
 
         if (!output_path.empty()) {
-            if (img.save_to_file(output_path)) {
-                std::cout << "Saved output image to '" << output_path << "'.\n";
+            auto save_t0 = std::chrono::high_resolution_clock::now();
+            bool saved = img.save_to_file(output_path);
+            auto save_t1 = std::chrono::high_resolution_clock::now();
+            double save_ms = std::chrono::duration<double, std::milli>(save_t1 - save_t0).count();
+            if (saved) {
+                std::cout << "Saved output image to '" << output_path << "' in " << save_ms << " ms.\n";
             } else {
                 std::cerr << "Failed to save output image to '" << output_path << "'.\n";
                 return 1;
@@ -164,13 +180,21 @@ int main(int argc, char* argv[]) {
         }
 
         if (!seams_json_path.empty()) {
-            if (SeamCarver::export_seams_json(seams_json_path, records)) {
-                std::cout << "Exported seam records to '" << seams_json_path << "'.\n";
+            auto json_t0 = std::chrono::high_resolution_clock::now();
+            bool exported = SeamCarver::export_seams_json(seams_json_path, records);
+            auto json_t1 = std::chrono::high_resolution_clock::now();
+            double json_ms = std::chrono::duration<double, std::milli>(json_t1 - json_t0).count();
+            if (exported) {
+                std::cout << "Exported seam records to '" << seams_json_path << "' in " << json_ms << " ms.\n";
             } else {
                 std::cerr << "Failed to export seam records to '" << seams_json_path << "'.\n";
             }
         }
     }
+
+    auto cli_end = std::chrono::high_resolution_clock::now();
+    double total_cli_ms = std::chrono::duration<double, std::milli>(cli_end - cli_start).count();
+    std::cout << "Total CLI execution time: " << total_cli_ms << " ms\n";
 
     return 0;
 }

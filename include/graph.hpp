@@ -25,7 +25,8 @@ public:
     void reset(int num_vertices);
     void reset_flows();
 
-    void add_edge(int u, int v, double cap);
+    void add_edge(int u, int v, double cap, double rev_cap = 0.0);
+    void reserve_vertex(int u, std::size_t degree) { adj_[u].reserve(degree); }
 
     int num_vertices() const { return static_cast<int>(adj_.size()); }
     std::size_t num_edges() const { return edge_count_; }
