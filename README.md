@@ -53,7 +53,103 @@ Seam carving resizes an image by iteratively finding and removing connected path
 
 ### 2.1 Dynamic Programming
 
-TODO
+#### Question 2(a)(i): Exponential number of vertical seams
+
+Consider an image with height $m$ and width $n>1$. A vertical seam contains
+one pixel in every row, and consecutive pixels may move by at most one column:
+
+\[
+|c_{r+1}-c_r|\leq 1.
+\]
+
+To obtain a lower bound, restrict attention to the first two columns, numbered
+0 and 1. Start every seam at column 0 in the first row. At each of the next
+$m-1$ rows, choose either to remain in the current column or to move to the
+other column. Both choices are valid because the columns are adjacent, so the
+change is always 0 or 1. Each binary sequence of $m-1$ choices gives a
+distinct valid seam. Therefore, there are at least
+
+\[
+2^{m-1}
+\]
+
+valid vertical seams. Since $2^{m-1}$ is exponential in $m$, the number of
+possible seams grows at least exponentially with image height. This is a lower
+bound: allowing all $n$ columns can only increase the number of seams.
+
+#### Question 2(a)(ii): Dynamic Programming formulation
+
+Let $e(r,c)$ be the energy of the pixel in row $r$, column $c$, where
+$0\le r<m$ and $0\le c<n$. Define the DP subproblem
+
+\[
+M(r,c)=\text{minimum energy of any valid seam from row 0 through }(r,c).
+\]
+
+The first row is the base case:
+
+\[
+M(0,c)=e(0,c).
+\]
+
+For every later row, a seam ending at $(r,c)$ must come from one of the
+three valid predecessors in the preceding row. Predecessors outside the image
+are omitted:
+
+\[
+M(r,c)=e(r,c)+
+\min\{M(r-1,c-1),M(r-1,c),M(r-1,c+1)\}.
+\]
+
+The minimum-energy seam ends at the least entry in the final row:
+
+\[
+\min_{0\le c<n}M(m-1,c).
+\]
+
+The recurrence has optimal substructure. If an optimal seam ending at
+$(r,c)$ used a non-optimal prefix ending at its predecessor, replacing that
+prefix with a lower-energy prefix would produce an even lower-energy complete
+seam, which is a contradiction. It also has overlapping subproblems because
+the same minimum-energy prefix ending at a pixel can be used by several
+possible paths to later rows. DP computes each pixel's subproblem once instead
+of enumerating the exponentially many complete seams.
+
+To recover the coordinates, store the predecessor selected for each DP cell.
+After selecting the minimum endpoint in the final row, follow predecessor
+pointers backwards until row 0, then reverse or place the recovered positions
+in row order. The implementation stores a predecessor table in
+`src/dp_seam.cpp`; the resulting seam has exactly one column index per row and
+satisfies the adjacency constraint by construction.
+
+For an $m\times n$ energy map, there are $mn$ states and only constant work
+per state, so seam finding takes $O(mn)$ time. The current implementation
+stores both cumulative costs and predecessors, using $O(mn)$ space.
+
+### Question 2(b): Divide and Conquer and Sobel convolution
+
+Sobel filtering estimates horizontal and vertical image gradients by applying
+two fixed $3\times3$ kernels to each pixel. Each output uses a constant
+number of neighboring pixel values, so computing the complete energy map for
+an $m\times n$ image takes $O(mn)$ time and $O(mn)$ output storage.
+
+A straightforward Divide and Conquer strategy could divide the image into
+regions, recursively filter each region, and combine the results. However,
+the Sobel kernel has constant size, and every pixel still must be visited.
+Handling the boundary halo between subregions adds bookkeeping but does not
+reduce the asymptotic work below $O(mn)$. Ordinary Divide and Conquer
+therefore does not provide an asymptotic improvement for this fixed-size
+convolution.
+
+Other techniques may improve constants or become useful in different
+settings, but they should not be confused with ordinary Divide and Conquer.
+For example, a separable implementation can replace a $3\times3$ filter
+with two one-dimensional passes, reducing arithmetic per pixel. FFT-based
+convolution can be advantageous for very large kernels or batch processing,
+although its overhead is unnecessary for a Sobel kernel. Parallel execution
+can also process independent pixels or image regions, subject to boundary
+handling, but it does not change the sequential DP recurrence used later for
+seam selection.
 
 ---
 
@@ -203,6 +299,12 @@ The C++ unit tests verify:
 - Prevention of jump discontinuities ($|c_r - c_{r\pm 1}| > 1$).
 - Horizontal seam extraction via transposition.
 - Energy equivalence and non-zero flow across both Dinic and Edmonds-Karp.
+- Exhaustive brute-force verification of DP on small deterministic and random energy maps.
+- RGB pixel-order preservation during vertical and horizontal seam removal.
+- Repeated DP resizing, exact target dimensions, and invalid resize requests.
+
+The DP-specific tests are included in `tests/test_dp.cpp` and are executed by
+the `make test` target.
 
 ### 2. Python Bonus Suite & Visualizer
 
@@ -244,6 +346,7 @@ Options:
   --remove-rows <n>         Number of horizontal seams to remove (default: 0)
   --width <w>               Target width (overrides --remove-cols)
   --height <h>              Target height (overrides --remove-rows)
+  --algorithm <name>        Seam-finding algorithm: 'graph_cut', 'dp', or 'greedy'
   --solver <name>           Max-flow solver: 'dinic' (default) or 'edmonds_karp'
   --energy <name>           Energy metric: 'dual' (default) or 'sobel'
   --compare                 Run both Dinic and Edmonds-Karp and compare
@@ -259,17 +362,31 @@ Options:
 ./bin/seam_carve -i input.jpg -o output_carved.jpg --remove-cols 50 --remove-rows 20 --solver dinic
 ```
 
-#### 2. Resize using Edmonds-Karp (Without Dinic)
+#### 2. Resize using Dynamic Programming
+
+```bash
+./bin/seam_carve -i input.jpg -o output_dp.png \
+  --remove-cols 30 --remove-rows 15 --algorithm dp \
+  --export-seams seams_dp.json
+```
+
+`--remove-cols` removes vertical seams and reduces the width. `--remove-rows`
+removes horizontal seams and reduces the height. Alternatively, `--width` and
+`--height` specify positive target dimensions that cannot exceed the original
+dimensions. The image is resized by repeatedly recomputing energy, finding one
+seam, and removing it.
+
+#### 3. Resize using Edmonds-Karp (Without Dinic)
 ```bash
 ./bin/seam_carve -i input.jpg -o output_ek.jpg --remove-cols 10 --solver edmonds_karp
 ```
 
-#### 3. Run Benchmark Comparison (Dinic vs. Edmonds-Karp)
+#### 4. Run Benchmark Comparison (Dinic vs. Edmonds-Karp)
 ```bash
 ./bin/seam_carve -i input.jpg --remove-cols 5 --remove-rows 5 --compare --export-csv benchmark.csv
 ```
 
-#### 4. Export Seam Data for Visualizer
+#### 5. Export Seam Data for Visualizer
 ```bash
 ./bin/seam_carve -i input.jpg -o out.jpg --remove-cols 30 --export-seams seams.json
 ```
@@ -277,6 +394,41 @@ Options:
 ---
 
 ## Benchmarking & Complexity Analysis
+
+### Dynamic Programming Complexity
+
+For an image of height $H$ and width $W$, the current implementation has
+the following costs:
+
+| Operation | Time | Space | Notes |
+|---|---:|---:|---|
+| Energy map | $O(HW)$ | $O(HW)$ | Each pixel evaluates a constant-size dual-gradient or Sobel neighborhood. |
+| Vertical seam search | $O(HW)$ | $O(HW)$ | One DP state and constant predecessor comparisons per pixel. |
+| Horizontal seam search | $O(HW)$ | $O(HW)$ | Transposes the energy map, then runs the same vertical DP. |
+| Backtracking | $O(H)$ | $O(H)$ output | One predecessor is followed per row; horizontal backtracking is $O(W)$. |
+| Seam removal | $O(HW)$ | $O(HW)$ temporary image storage | The current image implementation copies the remaining pixels. |
+| One complete seam iteration | $O(HW)$ | $O(HW)$ | Energy, DP, backtracking, and removal are all bounded by the image area. |
+
+The implementation currently stores an $H\times W$ cumulative-cost table and
+an $H\times W$ predecessor table, so its DP working memory is $O(HW)$.
+The cumulative-cost table only needs the previous row while the recurrence is
+being evaluated, so rolling arrays could reduce that table to $O(W)$. The
+predecessor table is still $O(HW)$ if direct backtracking is required; thus
+rolling the costs reduces memory constants but does not change the overall
+asymptotic space bound for this implementation.
+
+When $K$ seams are removed, the total work is the sum of the costs for the
+successively smaller images. A simple upper bound is $O(KHW)$, while the
+actual work is lower because either $H$ or $W$ decreases after every
+iteration. The current implementation removes all requested vertical seams
+before all requested horizontal seams.
+
+The DP recurrence has a row-to-row dependency: row $r$ cannot be finalized
+until row $r-1$ is known. This limits parallelism inside one seam search.
+Energy calculations and independent benchmark runs can be parallelized, but
+multithreading the small constant-size predecessor comparisons is unlikely to
+justify its synchronization overhead for ordinary image sizes. The sequential
+DP implementation is therefore appropriate for the assignment baseline.
 
 ### Theoretical Complexity Comparison
 | Metric | Greedy Algorithm | Dynamic Programming | Edmonds-Karp (Graph Cut) | Dinic's Algorithm (Graph Cut) |
