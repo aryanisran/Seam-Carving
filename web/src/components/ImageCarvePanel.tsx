@@ -1,17 +1,36 @@
 // "Effect on the image": step through every seam an algorithm removes from the working image.
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ALGO_LABEL, Algorithm, seamsInOriginal } from '../algo/carve';
-import { computeEnergy } from '../algo/energy';
+import { EnergyMetric, computeEnergy } from '../algo/energy';
 import { Solver } from '../algo/graphcut';
-import { useCarve } from '../algo/useCarve';
+import { CarveResult, useCarve } from '../algo/useCarve';
+import { RGBImage } from '../algo/image';
 import { CarveSettings } from '../App';
 import { HORZ, VERT, drawImage, energyToImage, fillPixel, zoomFor } from './canvas';
 import { Panel, StepPlayer } from './StepPlayer';
 import { fmt } from './CellGrid';
 
+interface Shown {
+  result: CarveResult;
+  image: RGBImage;
+  cols: number;
+  rows: number;
+  metric: EnergyMetric;
+}
+
 export function ImageCarvePanel({ algorithm, settings, solver = 'dinic' }: { algorithm: Algorithm; settings: CarveSettings; solver?: Solver }) {
-  const { image, imageKey, cols, rows, metric } = settings;
-  const { result, progress, error, key } = useCarve(imageKey, image, cols, rows, { algorithm, metric, solver });
+  const live = settings;
+  const { result: liveResult, progress, error, key } = useCarve(live.imageKey, live.image, live.cols, live.rows, { algorithm, metric: live.metric, solver });
+  // Keep showing the last finished result while a new one is carved, so the panel never
+  // collapses to a progress bar and the page below it does not jump.
+  const last = useRef<Shown | null>(null);
+  if (liveResult && live.image) last.current = { result: liveResult, image: live.image, cols: live.cols, rows: live.rows, metric: live.metric };
+  const busy = !liveResult && !error;
+  const result = last.current?.result;
+  const image = last.current?.image ?? live.image;
+  const cols = last.current?.cols ?? live.cols;
+  const rows = last.current?.rows ?? live.rows;
+  const metric = last.current?.metric ?? live.metric;
   const n = result?.records.length ?? 0;
   const [k, setK] = useState(0);
   const [view, setView] = useState<'image' | 'energy'>('image');
@@ -45,14 +64,19 @@ export function ImageCarvePanel({ algorithm, settings, solver = 'dinic' }: { alg
   const title = `${ALGO_LABEL[algorithm]}${algorithm === 'graph_cut' ? ` (${solver === 'dinic' ? 'Dinic' : 'Edmonds-Karp'})` : ''} - effect on the image`;
 
   if (error) return <div className="panel error">Carving failed: {error}</div>;
+  const progressBar = (
+    <div className="progress-wrap">
+      <div className="progress"><div style={{ width: `${Math.round(progress * 100)}%` }} /></div>
+      <span className="muted">
+        Removing {live.cols + live.rows} seams from the {live.image?.w} x {live.image?.h} working image... {Math.round(progress * 100)}%
+      </span>
+    </div>
+  );
   if (!result) {
     return (
-      <section className="player">
+      <section className="player first-load">
         <header className="player-head"><h3 className="player-title">{title}</h3></header>
-        <div className="progress-wrap">
-          <div className="progress"><div style={{ width: `${Math.round(progress * 100)}%` }} /></div>
-          <span className="muted">Removing {cols + rows} seams from the {image.w} x {image.h} working image... {Math.round(progress * 100)}%</span>
-        </div>
+        {progressBar}
       </section>
     );
   }
@@ -86,13 +110,16 @@ export function ImageCarvePanel({ algorithm, settings, solver = 'dinic' }: { alg
       input={<code>{image.w} x {image.h} -&gt; {image.w - cols} x {image.h - rows}: remove {cols} vertical + {rows} horizontal seams ({metric === 'dual' ? 'dual-gradient' : 'Sobel'} energy)</code>}
       narration={narration}
     >
-      <div className="row-panels">
-        <Panel title={`Current image ${img.w} x ${img.h}`} aside={<span className="stat">seam {Math.min(step + 1, n)} / {n}</span>}>
-          <canvas ref={curRef} className="pix" />
-        </Panel>
-        <Panel title="Removed seams on the original" aside={<span className="stat">energy removed <b>{fmt(round1(removedEnergy))}</b></span>}>
-          <canvas ref={allRef} className="pix" />
-        </Panel>
+      <div className="carve-area">
+        <div className="row-panels">
+          <Panel title={`Current image ${img.w} x ${img.h}`} aside={<span className="stat">seam {Math.min(step + 1, n)} / {n}</span>}>
+            <div className="pix-box"><canvas ref={curRef} className="pix fit" /></div>
+          </Panel>
+          <Panel title="Removed seams on the original" aside={<span className="stat">energy removed <b>{fmt(round1(removedEnergy))}</b></span>}>
+            <div className="pix-box"><canvas ref={allRef} className="pix fit" /></div>
+          </Panel>
+        </div>
+        {busy && <div className="busy-overlay" role="status">{progressBar}</div>}
       </div>
     </StepPlayer>
   );

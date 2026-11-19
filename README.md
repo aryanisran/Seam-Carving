@@ -869,7 +869,7 @@ The GitHub Actions pipeline ([`.github/workflows/ci.yml`](.github/workflows/ci.y
 2. **Web CI**: `npm ci`, `npm test` (TypeScript algorithms vs `bin/seam_carve`: identical seams and pixels), `npm run build` (type-check and production build).
 3. **Python CI**: the `pytest` suite for the offline visualiser, including its pixel-exact replay check.
 4. **End-to-End Demo**: carves the synthetic sample, renders all visualisations and uploads them as workflow artifacts.
-5. **Continuous Deployment**: every push to `main` deploys the visualizer to GitHub Pages; pushing a tag such as `v1.0` publishes a GitHub Release with the Linux binary, demo GIF and images, and the Dinic vs Edmonds-Karp benchmark CSV.
+5. **Continuous Deployment**: once GitHub Pages is enabled for the repo (Pages source "GitHub Actions" and the Actions variable `ENABLE_PAGES=true`), every push to `main` deploys the visualizer to GitHub Pages; pushing a tag such as `v1.0` publishes a GitHub Release with the Linux binary, demo GIF and images, and the Dinic vs Edmonds-Karp benchmark CSV.
 
 ---
 

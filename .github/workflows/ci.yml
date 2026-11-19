@@ -77,8 +77,10 @@ jobs:
 
   deploy-web:
     # CD: every push to main publishes the visualizer to GitHub Pages.
-    # One-time setup: repo Settings -> Pages -> Source: "GitHub Actions".
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    # Skipped until Pages is set up, so main stays green. One-time setup by the repo owner:
+    #   1. Settings -> Pages -> Source: "GitHub Actions"
+    #   2. Settings -> Secrets and variables -> Actions -> Variables -> New variable ENABLE_PAGES = true
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.ENABLE_PAGES == 'true'
     needs: build-and-test
     runs-on: ubuntu-latest
     permissions:
