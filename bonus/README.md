@@ -3,10 +3,10 @@
 | Bonus | What | Where |
 |---|---|---|
 | **7a** Step-by-step visualisation | Animated GIF with every seam highlighted before removal; all seams drawn on the original image; original vs seam carving vs scaling vs cropping; energy map | `bonus/visualize.py` |
-| **7b** User interaction | Streamlit web app: upload an image, pick target width/height, solver and energy, then scrub through every intermediate size | `bonus/app.py` |
-| **7c** CI/CD | GitHub Actions: build, C++ tests, Python tests, app smoke test, demo run with downloadable outputs; tagged pushes (`v*`) publish a GitHub Release | `.github/workflows/ci.yml` |
+| **7b** User interaction | React web visualizer in `web/` (see the main README): one tab per algorithm with step-by-step players, live sliders for working and target size | `web/` |
+| **7c** CI/CD | GitHub Actions: build, C++ tests, web tests against the C++ binary, Python tests, demo run with downloadable outputs, GitHub Pages deploy on main; tagged pushes (`v*`) publish a GitHub Release | `.github/workflows/ci.yml` |
 
-The bonus code never re-implements seam finding. Every seam comes from the C++ graph-cut binary through its `--export-seams` JSON, and Python only replays and draws it. A test checks that the Python replay reproduces the C++ output **pixel for pixel**.
+This Python part never re-implements seam finding either: every seam comes from the C++ binary through its `--export-seams` JSON, and Python only replays and draws it. A test checks that the Python replay reproduces the C++ output **pixel for pixel**.
 
 ## Setup (WSL / Ubuntu)
 
@@ -21,9 +21,6 @@ pip install -r bonus/requirements.txt
 ## Usage
 
 ```bash
-# Interactive app -> open http://localhost:8501 in your Windows browser
-streamlit run bonus/app.py
-
 # Visualise any carving run
 ./bin/seam_carve -i samples/synthetic_tower.png -o out.png --remove-cols 40 --remove-rows 15 --export-seams seams.json
 python bonus/visualize.py --image samples/synthetic_tower.png --seams seams.json --out bonus/out

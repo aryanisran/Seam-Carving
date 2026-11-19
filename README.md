@@ -44,8 +44,8 @@ Targeted to build and run seamlessly under **WSL (Windows Subsystem for Linux)**
 | **Graph Cut (Dinic)** | `GraphCutSeamFinder`<br>`DinicSolver` | [`include/graph_cut_seam.hpp`](include/graph_cut_seam.hpp)<br>[`src/maxflow.cpp`](src/maxflow.cpp) | Layered level graph BFS + blocking flow DFS on $s-t$ flow network. |
 | **Graph Cut (Edmonds-Karp)** | `GraphCutSeamFinder`<br>`EdmondsKarpSolver` | [`include/graph_cut_seam.hpp`](include/graph_cut_seam.hpp)<br>[`src/maxflow.cpp`](src/maxflow.cpp) | Shortest augmenting path BFS on residual network. |
 | **Visualizer & Replay** | Python Replay Engine | [`bonus/visualize.py`](bonus/visualize.py) | Seam validation, animated GIF replay, overlay diagrams, comparison panels. |
-| **Interactive App** | Streamlit Web UI | [`bonus/app.py`](bonus/app.py) | Interactive image upload, parameter tuning, live carving, and scrubber. |
-| **CI/CD Pipeline** | GitHub Actions | [`.github/workflows/ci.yml`](.github/workflows/ci.yml) | Automated build, C++ test suite, Python test suite, smoke test, and release tagging. |
+| **Interactive Visualizer** | React + TypeScript web app | [`web/`](web/) | One tab per algorithm (Dynamic Programming, Greedy, Graph Cut): step-by-step player of the algorithm's internals plus seam-by-seam effect on a real image. |
+| **CI/CD Pipeline** | GitHub Actions | [`.github/workflows/ci.yml`](.github/workflows/ci.yml) | Automated build, C++ tests, web tests against the C++ binary, Python tests, GitHub Pages deploy, and release tagging. |
 
 ---
 
@@ -372,11 +372,10 @@ For an image of size $H \times W$:
 ├── .github/workflows/
 │   └── ci.yml                  # GitHub Actions CI/CD (build, test, smoke test, releases)
 ├── bonus/                      # Bonus features
-│   ├── app.py                  # Streamlit interactive web application
 │   ├── carver.py               # Python wrapper executing bin/seam_carve
 │   ├── make_sample.py          # Synthetic test image generator
 │   ├── README.md               # Bonus module documentation & instructions
-│   ├── requirements.txt        # Python dependencies (streamlit, pillow, numpy, pytest)
+│   ├── requirements.txt        # Python dependencies (pillow, numpy, pytest)
 │   ├── visualize.py            # Step-by-step seam replay, GIF, overlay, comparison
 │   └── tests/                  # Pytest suite (29 tests)
 │       ├── conftest.py
@@ -413,6 +412,17 @@ For an image of size $H \times W$:
     ├── test_greedy.cpp         # Greedy unit test suite
     ├── compare_greedy_dp.cpp   # Greedy vs DP seams & visual quality (make compare -> results/greedy_vs_dp/)
     └── benchmark_algorithms.cpp # Greedy vs DP vs Graph Cut benchmark (make benchmark -> results/benchmark/)
+```
+
+The bonus web visualizer lives in `web/` (React + TypeScript, built with Vite):
+
+```
+web/
+  src/algo/        energy.ts, dp.ts, greedy.ts, graphcut.ts  - line-for-line ports of the C++ algorithms
+                   carve.ts, carve.worker.ts, useCarve.ts     - carving loop (runs in a Web Worker)
+  src/components/  StepPlayer (transport, timeline, narration), CellGrid, FlowNetwork (SVG), ImageCarvePanel
+  src/tabs/        DPTab, GreedyTab, GraphCutTab
+  tests/           algo.test.ts - hand-checked examples + seam-for-seam / pixel-for-pixel parity with bin/seam_carve
 ```
 
 ---
@@ -489,6 +499,21 @@ The Python test suite verifies:
 - Boundary bounds checking and 8-connectivity validation.
 - Transposition handling for horizontal seam replay.
 - **Pixel-exact equivalence** checking that Python seam replay matches the output of `bin/seam_carve` byte-for-byte.
+
+### 3. Web Visualizer (React)
+
+Needs Node.js 20+.
+
+```bash
+cd web
+npm install          # once
+npm run dev          # open the printed http://localhost:5173 link
+npm test             # TypeScript algorithms vs bin/seam_carve (run `make all` first)
+npm run build        # static site in web/dist/
+```
+
+On Windows without a Linux `bin/seam_carve`, the parity tests can call the WSL build:
+`SEAM_CARVE_CMD="wsl -d Ubuntu -- ./bin/seam_carve" npm test`.
 
 ---
 
@@ -789,33 +814,35 @@ To address this without compromising mathematical correctness, the engine was op
 
 | Bonus | What | Implementation |
 |---|---|---|
-| **7a. Step-by-Step Visualisation** | Animated GIF highlighting each seam before removal; all seams mapped to original coordinates; 4-way comparison (seam carving vs. scaling vs. cropping); energy map render | [`bonus/visualize.py`](bonus/visualize.py) |
-| **7b. User Interaction** | Streamlit web application: upload image, adjust target dimensions, choose solver/energy, carve, and scrub through intermediate steps | [`bonus/app.py`](bonus/app.py) |
-| **7c. CI/CD & Releases** | Automated GitHub Actions workflow: C++ build & tests, Python test suite, Streamlit smoke test, demo artifacts, and tag-triggered GitHub Releases | [`.github/workflows/ci.yml`](.github/workflows/ci.yml) |
+| **7a. Step-by-Step Visualisation** | Web visualizer: one tab per algorithm with a step player (play/pause, step, speed, timeline) that animates the algorithm's internals on a small grid (DP table filling and backtracking, greedy choices, max-flow augmenting paths and the min cut), plus a seam-by-seam player on a real image with every removed seam drawn on the original. Offline renders (GIF, overlay, comparison) via Python. | [`web/`](web/), [`bonus/visualize.py`](bonus/visualize.py) |
+| **7b. User Interaction** | Upload an image or pick a sample, drag the working width and target width/height (live preview), switch energy function and max-flow solver; every algorithm re-carves in the browser (Web Worker) and can be scrubbed seam by seam, on the image or on its energy map. | [`web/`](web/) |
+| **7c. CI/CD** | GitHub Actions: C++ build and tests, web tests that compare the TypeScript algorithms with the C++ binary, Python tests, demo artifacts, automatic GitHub Pages deployment of the visualizer on every push to `main`, and tag-triggered GitHub Releases | [`.github/workflows/ci.yml`](.github/workflows/ci.yml) |
 
-> **Design Note:** The bonus layer never reimplements seam finding. Every seam originates from the C++ engine via `--export-seams` JSON. The Python suite simply replays, validates, and renders the result. A test verifies that the Python replay matches the C++ output **pixel for pixel**.
+> **Design Note:** The web visualizer runs the algorithms in the browser so it can be hosted as a static site and show their internal steps. To guarantee it shows exactly what the team's C++ does, `web/src/algo/*.ts` are line-for-line ports (same graph construction, same Dinic and capacity-scaling Edmonds-Karp, same tie-breaking), and `web/tests/algo.test.ts` checks in CI that they remove **the same seams and produce the same pixels** as `bin/seam_carve` for DP, Greedy and Graph Cut (both solvers, both energy functions).
 
 ---
 
 ### 7a. Step-by-Step Visualizer
 
-`bonus/visualize.py` replays the JSON seam records against the original image to produce comprehensive analysis artifacts:
+**Web (`web/`).** Each tab has two players:
 
-- **`steps.gif`**: Animated progression with each horizontal/vertical seam rendered in red before removal.
-- **`overlay.png`**: Original image with all removed seams drawn simultaneously. Reconstructed by maintaining an $O(HW)$ coordinate tracking grid across seam steps.
-- **`comparison.png`**: Side-by-side comparison figure displaying:
-  1. *Original Image*
-  2. *Seam Carving* (content-aware)
-  3. *Scaling* (Lanczos downsampling)
-  4. *Cropping* (center crop)
-- **`energy.png`**: Visual representation of the dual-gradient energy landscape.
+1. **How it works** - a small energy grid (presets: a winding valley, the greedy counterexample from Avik Das, or random) with the algorithm's pseudocode, the active line highlighted, and a narration of every step:
+   - *Dynamic Programming*: each cell of `M` with its three candidate parents, the chosen parent arrow, then the minimum of the last row and backtracking.
+   - *Greedy*: the reachable pixels in each row, the running total, and at the end the optimal (DP) seam for comparison.
+   - *Graph Cut*: the flow network (S, T, finite edges labelled flow/capacity, infinite back and diagonal edges), Dinic level graphs and blocking flows or Edmonds-Karp capacity-scaling phases and augmenting paths, then the source side of the min cut, the seam pixel of each row, and cut capacity = max flow.
+2. **Effect on the image** - every seam the algorithm removes from the working image, shown on the current image (or its energy map) and accumulated on the original. Vertical seams are red, horizontal seams blue.
 
-#### Usage:
+Colours follow the Okabe-Ito colour-blind-safe palette and every state also has its own outline style. Keyboard: Space play/pause, Left/Right step, Home/End.
+
+**Python (`bonus/visualize.py`).** Replays the C++ `--export-seams` JSON against the original image to produce static files:
+
+- **`steps.gif`**: animated progression with each vertical seam (red) or horizontal seam (blue) highlighted before removal.
+- **`overlay.png`**: original image with all removed seams drawn simultaneously, using an $O(HW)$ coordinate-tracking grid.
+- **`comparison.png`**: original vs seam carving vs scaling vs cropping.
+- **`energy.png`**: the dual-gradient energy map.
+
 ```bash
-# 1. Carve image and export seam metadata in C++
 ./bin/seam_carve -i samples/synthetic_tower.png -o carved.png --remove-cols 40 --remove-rows 15 --export-seams seams.json
-
-# 2. Render all visualisations to bonus/out/
 python bonus/visualize.py --image samples/synthetic_tower.png --seams seams.json --out bonus/out
 ```
 
@@ -823,30 +850,26 @@ python bonus/visualize.py --image samples/synthetic_tower.png --seams seams.json
 
 ### 7b. Interactive Web Application
 
-An interactive web application built with [Streamlit](https://streamlit.io/) provides hands-on exploration of seam carving:
+- **Image**: two samples or upload your own (PNG, JPG, BMP, WebP); decoded and processed entirely in the browser.
+- **Size**: working width (live preview while dragging), target width and height (dashed box on the preview). Carving restarts automatically when the sliders stop moving.
+- **Algorithm options**: dual-gradient or Sobel energy; Dinic or Edmonds-Karp for graph cut.
+- **Responsiveness**: carving runs in a Web Worker with a progress bar, and results are cached per setting.
 
-- **Live Carving**: Choose from built-in samples or upload custom images.
-- **Configurable Parameters**: Adjust columns/rows to remove, algorithm solver, and gradient metric.
-- **Interactive Scrubber**: After carving, scrub smoothly through every intermediate image size without re-running flow computations, replaying saved seam records on demand.
-- **Execution Diagnostics**: Displays wall-clock runtime, max-flow values, and step breakdown logs.
-
-#### Running the App:
 ```bash
-streamlit run bonus/app.py
+cd web && npm install && npm run dev     # http://localhost:5173
 ```
-*Open http://localhost:8501 in your browser.*
 
 ---
 
 ### 7c. CI/CD & Automated Releases
 
-The repository includes a production-grade GitHub Actions pipeline ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)):
+The GitHub Actions pipeline ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) runs on every push and pull request:
 
-1. **C++ CI**: Compiles using `g++ -O3 -Wall -Wextra -Wpedantic` (`make all`) and runs the unit test suite (`make test`).
-2. **Python CI**: Sets up Python 3.11, installs dependencies, and runs all 29 `pytest` test cases.
-3. **App Smoke Test**: Boots the Streamlit app headlessly and validates responsiveness via health-check probes.
-4. **End-to-End Demo**: Carves a synthetic test image, generates all visualization outputs, and uploads them as downloadable workflow artifacts.
-5. **Continuous Deployment (CD)**: Pushing a git tag (e.g. `v1.0`) automatically publishes a GitHub Release containing prebuilt binaries, demonstration GIFs, and benchmark figures.
+1. **C++ CI**: `make all` with `-Wall -Wextra -Wpedantic`, then `make test` (Graph Cut, DP and Greedy unit tests).
+2. **Web CI**: `npm ci`, `npm test` (TypeScript algorithms vs `bin/seam_carve`: identical seams and pixels), `npm run build` (type-check and production build).
+3. **Python CI**: the `pytest` suite for the offline visualiser, including its pixel-exact replay check.
+4. **End-to-End Demo**: carves the synthetic sample, renders all visualisations and uploads them as workflow artifacts.
+5. **Continuous Deployment**: every push to `main` deploys the visualizer to GitHub Pages; pushing a tag such as `v1.0` publishes a GitHub Release with the Linux binary, demo GIF and images, and the Dinic vs Edmonds-Karp benchmark CSV.
 
 ---
 
@@ -875,7 +898,7 @@ The C++ binary and Python visualization layer communicate via a standardized, de
 - For vertical seams: `indices[r]` is the column index removed at row `r`.
 - For horizontal seams: `indices[c]` is the row index removed at column `c`.
 
-> **Pluggable Architecture:** Any alternative algorithm (such as Dynamic Programming or Greedy Search) can produce this identical JSON output schema and immediately gain animated GIF export, comparison panels, and Streamlit interactive scrubbers with zero code modifications.
+> **Pluggable Architecture:** Any alternative algorithm (such as Dynamic Programming or Greedy Search) can produce this identical JSON output schema and immediately gains the Python GIF export, overlays and comparison panels with zero code modifications.
 
 ---
 
@@ -916,7 +939,7 @@ In compliance with **Item 9.a.v** of the CSD3130 Assignment 2 Brief, the followi
 | Contributor | AI Tool & Model | Platform | Scope of Assistance |
 |---|---|---|---|
 | **Aryan bin Mohamed Isran** (`aryanisran`) | **Google Gemini** | Google Antigravity CLI | **Graph Cut Optimization & Benchmarking**: <br>• Theoretical profiling of $O(V E^2)$ runtime bottlenecks on continuous gradient grid networks.<br>• Algorithmic design of Capacity Scaling ($\Delta$-scaling) and Multi-Path Wavefront Augmentation for Edmonds-Karp.<br>• Implementation of multi-branch blocking-flow DFS and dead-end level graph pruning in Dinic.<br>• Graph topology optimization (merging forward/backward edges, fixed-degree pre-allocation).<br>• Zero-allocation $O(\text{visited})$ array resets and raw pointer traversal in tight loops.<br>• Empirical benchmarking on 80×60 and 427×290 images, and rubric compliance verification. |
-| **Charity** (`t-charity`) | **Claude Opus 5.5** (Anthropic) | Claude Code | **Bonus Features (Item 7)**: <br>• Step-by-step seam replay and visualization engine (`bonus/visualize.py`).<br>• Streamlit interactive web application (`bonus/app.py`).<br>• Automated CI/CD pipeline and release workflow (`.github/workflows/ci.yml`).<br>• Python unit test suite for visualization replay (`bonus/tests/test_visualize.py`). |
+| **Charity** (`t-charity`) | **Claude Opus 5.5** (Anthropic) | Claude Code | **Bonus Features (Item 7)**: <br>- Planning the bonus design (seam JSON export replayed by a separate visual layer).<br>- Python step-by-step visualiser and its tests (`bonus/visualize.py`, `bonus/tests/`).<br>- React + TypeScript web visualizer with one tab per algorithm and TypeScript ports of the C++ algorithms (`web/`), plus its parity tests against the C++ binary.<br>- CI/CD pipeline, GitHub Pages deployment and release workflow (`.github/workflows/ci.yml`).<br>- Browser testing with Playwright, and web research on visualizer design via a research subagent. |
 | **Chan Rou Hui** (`hui0w0`) | **Claude Opus 5.5** (Anthropic) | Claude Code | **Greedy Algorithm (Item 3)**: <br>• Implementation of `GreedySeamFinder` and its integration into `SeamCarver` / `--algorithm greedy`.<br>• Greedy unit tests (`tests/test_greedy.cpp`): counter-example, edge cases, brute-force and DP cross-checks.<br>• Greedy vs DP comparison tool (`tests/compare_greedy_dp.cpp`) and the results in `results/greedy_vs_dp/`.<br>• Three-way benchmark of Greedy, DP and Graph Cut (`tests/benchmark_algorithms.cpp`, `results/benchmark/`), including prototype measurements of the Item 5d improvements.<br>• Write-up of README §2.2 and the Algorithm Benchmark section, review against the assignment brief and rubric, and extra verification (AddressSanitizer/UBSan builds, 20,000-map stress test). |
 
 ---
@@ -934,3 +957,21 @@ Below are the primary prompts used for the Greedy Algorithm (Item 3):
 1. **Reviewing my Greedy implementation after the DP integration**:
    > *"My teammate has added the DP tests and updated the documentation. Could you review my Greedy Algorithm implementation again?"*
    - **AI Response & Contribution**: Reviewed the Greedy work against the newly merged DP code and documentation. It completed the README §2.2 section that was still marked `TODO`, and corrected the stated Greedy complexity to $O(W+H)$ time and $O(H)$ space. It also made `GreedySeamFinder` record `elapsed_ms` in the same way as `DPSeamFinder`, and aligned the structure of `tests/test_greedy.cpp` with `tests/test_dp.cpp`.
+
+Below are the primary prompts used for the Bonus Features (Item 7):
+
+1. **Planning the bonus**:
+   > *"can you take a look at the branch? the repo is called graph-cut. can you plan it out how you're going to do the bonus part?"*
+   - **AI Response & Contribution**: Read the assignment brief and the C++ code, and proposed exporting each removed seam from the C++ program as JSON and replaying it in a separate visualisation layer, so the bonus never changes the seam-finding code.
+2. **First implementation**:
+   > *"okay i created a bonus branch. can you start the bonus code there?"*
+   - **AI Response & Contribution**: Wrote `bonus/visualize.py` (seam validation, replay with original-coordinate tracking, GIF, overlay, comparison, energy renders), its pytest suite including the pixel-exact check against `bin/seam_carve`, and the first GitHub Actions workflow.
+3. **Live interaction**:
+   > *"as i slide the working width slider to the right/left, the image adjusts at the same time"*
+   - **AI Response & Contribution**: Made the sliders update the preview continuously while dragging instead of only on release.
+4. **Browser testing**:
+   > *"are you able to run playwright and test it for me"*
+   - **AI Response & Contribution**: Drove the app in a headless browser with real mouse drags, checked every tab and the absence of JavaScript errors, and reviewed screenshots.
+5. **React visualizer for all algorithms**:
+   > *"i want something like this [screenshot of a step-by-step algorithm visualizer], for all the algorithms. instead of streamlit and python, lets use react, create a tab for each algorithm showing the step by step algorithm on how it works for each algorithm and how it affects the image. use a subagent to webresearch on relevant website design skills and also look into the algorithms itself for better context"*
+   - **AI Response & Contribution**: A research subagent summarised design patterns from existing algorithm visualizers (VisuAlgo, algorithm-visualizer.org, USFCA), the colour-blind-safe Okabe-Ito palette, and the original papers (Avidan & Shamir 2007; Rubinstein, Shamir & Avidan 2008). Claude then ported the team's C++ energy, DP, Greedy and Graph Cut (Dinic and capacity-scaling Edmonds-Karp) code line for line to TypeScript, built the React app in `web/`, added tests that compare it with `bin/seam_carve` seam for seam and pixel for pixel, and added the GitHub Pages deployment to CI.

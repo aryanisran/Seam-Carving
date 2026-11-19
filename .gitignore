@@ -36,3 +36,8 @@ __pycache__/
 .venv/
 bonus/out/
 demo/
+
+# Web visualizer
+web/node_modules/
+web/dist/
+web/.tmp-test/

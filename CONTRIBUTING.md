@@ -44,7 +44,7 @@ The repository is designed to be modular. All algorithms operate on shared image
                                                           ▼
                                               ┌───────────────────────┐
                                               │ bonus/visualize.py    │
-                                              │ & Streamlit Web App   │
+                                              │ & React Visualizer    │
                                               └───────────────────────┘
 ```
 
@@ -146,7 +146,7 @@ test: $(TEST_TARGET) $(TEST_DP) $(TEST_GREEDY)
 
 ---
 
-## 4. Free Bonus Visualizations & Streamlit UI
+## 4. Free Bonus Visualizations & Web Visualizer
 
 By outputting seams via `SeamCarver::export_seams_json` (the `--export-seams <path>.json` flag), your algorithm automatically gains access to all bonus tools without writing any Python or GUI code:
 
@@ -156,8 +156,8 @@ By outputting seams via `SeamCarver::export_seams_json` (the `--export-seams <pa
    ```
    Generates `steps.gif`, `overlay.png` (all removed seams overlaid), `comparison.png`, and `energy.png`.
 
-2. **Interactive Streamlit Web App**:
-   Once `--algorithm` is hooked into `main.cpp` and `bonus/carver.py`, users can select your algorithm in `streamlit run bonus/app.py` and scrub through intermediate resizing steps interactively.
+2. **Web Visualizer (`web/`)**:
+   The React app runs TypeScript ports of the algorithms (`web/src/algo/`). A new algorithm needs a port there and a tab in `web/src/tabs/`; `web/tests/algo.test.ts` then checks it against `bin/seam_carve` seam for seam.
 
 ---
 
