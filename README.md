@@ -19,9 +19,11 @@ Targeted to build and run seamlessly under **WSL (Windows Subsystem for Linux)**
 4. [Building & Testing](#building--testing)
 5. [CLI Usage & Options](#cli-usage--options)
 6. [Benchmarking & Complexity Analysis](#benchmarking--complexity-analysis)
+   - [Dynamic Programming Complexity](#dynamic-programming-complexity)
    - [Theoretical Complexity Comparison](#theoretical-complexity-comparison)
-   - [Empirical Benchmark Run](#empirical-benchmark-run-8060-textured-image)
+   - [Empirical Benchmark Run](#empirical-benchmark-run-80x60-textured-image)
    - [High-Resolution Scaling Benchmark](#high-resolution-scaling-benchmark-427x290-image)
+   - [Algorithm Benchmark: Greedy vs DP vs Graph Cut](#algorithm-benchmark-greedy-vs-dp-vs-graph-cut)
    - [Performance & Memory Optimizations](#performance--memory-optimizations)
 7. [Bonus Features](#bonus-features)
    - [7a. Step-by-Step Visualizer](#7a-step-by-step-visualizer)
@@ -260,7 +262,7 @@ worst**, and it never matched the optimal seam (0/128 steps). The result therefo
 real photograph, not only on the synthetic test image.
 
 **Running time.** Running time is measured for all three algorithms in one place, the
-[Algorithm Benchmark](#algorithm-benchmark-greedy-vs-dp-vs-graph-cut-items-5b-and-5c), so every
+[Algorithm Benchmark](#algorithm-benchmark-greedy-vs-dp-vs-graph-cut), so every
 timing comes from the same run. For Greedy against DP:
 - **Seam search:** Greedy is **8× faster** than DP at 40×30 and **1,037× faster** at 1920×1440. The
   gap grows with image size, as $O(m+n)$ against $O(mn)$ predicts.
