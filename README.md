@@ -157,8 +157,10 @@ seam selection.
 
 Implementation: [`include/greedy_seam.hpp`](include/greedy_seam.hpp),
 [`src/greedy_seam.cpp`](src/greedy_seam.cpp). Tests: [`tests/test_greedy.cpp`](tests/test_greedy.cpp).
-Comparison with DP: [`tests/compare_greedy_dp.cpp`](tests/compare_greedy_dp.cpp)
-(`make compare`, results in [`results/greedy_vs_dp/`](results/greedy_vs_dp)).
+Seams and visual quality vs DP: [`tests/compare_greedy_dp.cpp`](tests/compare_greedy_dp.cpp)
+(`make compare`, results in [`results/greedy_vs_dp/`](results/greedy_vs_dp)). Running time:
+[`tests/benchmark_algorithms.cpp`](tests/benchmark_algorithms.cpp) (`make benchmark`, results in
+[`results/benchmark/`](results/benchmark)).
 
 #### Algorithm
 
@@ -257,28 +259,17 @@ On identical energy maps, greedy's seam costs **1.60× the optimum on average an
 worst**, and it never matched the optimal seam (0/128 steps). The result therefore holds on a
 real photograph, not only on the synthetic test image.
 
-**Running time.** Time to find one vertical seam on the same energy map (median of 5 runs):
-
-| Image size | Energy map | Greedy | DP | DP ÷ Greedy | Greedy seam ÷ optimal |
-|---|---:|---:|---:|---:|---:|
-| 80×60 | 0.057 ms | 0.001 ms | 0.012 ms | 15× | 1.06 |
-| 160×120 | 0.311 ms | 0.001 ms | 0.073 ms | 55× | 1.11 |
-| 320×240 | 1.23 ms | 0.003 ms | 0.481 ms | 172× | 1.11 |
-| 640×480 | 5.16 ms | 0.005 ms | 2.18 ms | 410× | 1.12 |
-| 1280×960 | 23.6 ms | 0.011 ms | 9.12 ms | 830× | 1.19 |
-| 1920×1440 | 51.3 ms | 0.017 ms | 20.9 ms | 1,225× | 1.11 |
-
-The speed-up grows with image size, as $O(mn)$ against $O(m+n)$ predicts. For a whole resize,
-though, the energy map is recomputed for every seam whichever algorithm is used, and it costs
-more than either search:
-
-| Whole tower carve | Seam search | Energy maps | Total |
-|---|---:|---:|---:|
-| Greedy | 0.8 ms | 21.2 ms | **22.0 ms** |
-| Dynamic Programming | 8.5 ms | 20.3 ms | **28.8 ms** |
+**Running time.** Running time is measured for all three algorithms in one place, the
+[Algorithm Benchmark](#algorithm-benchmark-greedy-vs-dp-vs-graph-cut-items-5b-and-5c), so every
+timing comes from the same run. For Greedy against DP:
+- **Seam search:** Greedy is **8× faster** than DP at 40×30 and **1,037× faster** at 1920×1440. The
+  gap grows with image size, as $O(m+n)$ against $O(mn)$ predicts.
+- **Whole resize** of the tower image: **19.8 ms with Greedy and 29.9 ms with DP**, only about
+  1.5× faster. The energy map is recomputed for every seam whichever algorithm is used, and it costs
+  more than either search (19.1 ms of Greedy's 19.8 ms).
 
 **Conclusion.** Greedy does **not** produce results comparable to DP. Its seam search is much
-faster, but the whole resize is only about 1.3× faster. In return it removes 45 % more energy on the
+faster, but the whole resize is only about 1.5× faster. In return it removes 45 % more energy on the
 synthetic image and 59 % more on the real photo, and the tower and clouds are visibly damaged. DP gives much better quality for a small extra cost.
 
 #### Alternative greedy designs considered
@@ -418,7 +409,8 @@ For an image of size $H \times W$:
     ├── test_graph_cut.cpp      # Graph Cut unit test suite
     ├── test_dp.cpp             # DP unit test suite
     ├── test_greedy.cpp         # Greedy unit test suite
-    └── compare_greedy_dp.cpp   # Greedy vs DP comparison (make compare -> results/greedy_vs_dp/)
+    ├── compare_greedy_dp.cpp   # Greedy vs DP seams & visual quality (make compare -> results/greedy_vs_dp/)
+    └── benchmark_algorithms.cpp # Greedy vs DP vs Graph Cut benchmark (make benchmark -> results/benchmark/)
 ```
 
 ---
@@ -465,8 +457,11 @@ The DP-specific tests are included in `tests/test_dp.cpp` and the Greedy tests i
 `tests/test_greedy.cpp`; both are executed by the `make test` target.
 
 ```bash
-# Greedy vs DP comparison (seams, visual quality, running time) -> results/greedy_vs_dp/
+# Greedy vs DP comparison (seams and visual quality) -> results/greedy_vs_dp/
 make compare
+
+# Benchmark of all three algorithms (Greedy, DP, Graph Cut) -> results/benchmark/
+make benchmark
 ```
 
 ### 2. Python Bonus Suite & Visualizer
@@ -638,6 +633,127 @@ Carving 20 vertical and 20 horizontal seams (40 seams total) on `samples/image.p
 
 ---
 
+### Algorithm Benchmark: Greedy vs DP vs Graph Cut
+
+[`tests/benchmark_algorithms.cpp`](tests/benchmark_algorithms.cpp) runs all three seam finders
+(Greedy, Dynamic Programming, and Graph Cut with both max-flow solvers) on **identical energy maps**,
+so only the seam finder differs. Run it with `make benchmark`; the results are in
+[`results/benchmark/`](results/benchmark). Timings are medians of 5 runs in WSL (one run once a seam
+takes over 200 ms). An algorithm is dropped at larger sizes once one seam takes over 3 s.
+
+**Time to find one vertical seam** (procedural tower scene, same content at every size):
+
+| Image size | Energy map | Greedy | DP | Graph Cut (Dinic) | Graph Cut (EK) |
+|---|---:|---:|---:|---:|---:|
+| 40×30 | 0.013 ms | 0.0003 ms | 0.003 ms | 1.31 ms | 1.44 ms |
+| 80×60 | 0.060 ms | 0.0006 ms | 0.011 ms | 14.0 ms | 16.0 ms |
+| 160×120 | 0.212 ms | 0.001 ms | 0.058 ms | 171 ms | 163 ms |
+| 320×240 | 0.926 ms | 0.002 ms | 0.484 ms | 3,523 ms | 2,230 ms |
+| 640×480 | 5.06 ms | 0.005 ms | 2.07 ms | — | 15,992 ms |
+| 1280×960 | 22.0 ms | 0.011 ms | 8.73 ms | — | — |
+| 1920×1440 | 52.8 ms | 0.020 ms | 20.7 ms | — | — |
+
+"—" = skipped because the previous size already took over 3 s per seam.
+
+**Optimality.** At every size, DP and both Graph Cut solvers find a seam with **exactly the same
+energy** (e.g. 1,909.3 at 320×240). This confirms the max-flow min-cut equivalence in practice.
+Greedy's seam costs 1.01–1.19× the optimum on these maps.
+
+**Growth.** Fitting time ∝ pixels<sup>α</sup> to the table:
+- Greedy: α ≈ 0.53 (×59 time for ×2,304 pixels, 40×30 → 1920×1440). This is close to the 0.5 of
+  $O(W+H)$, which grows like √pixels.
+- DP: α ≈ 1.15 (×7,330). This matches $O(WH)$; the extra 0.15 is likely cache misses once its
+  12 B/pixel tables outgrow the cache.
+- Energy map: α ≈ 1.07, also $O(WH)$.
+- Graph Cut: α ≈ 2.0 for Dinic (×252 for ×16 pixels, 80×60 → 320×240) and α ≈ 1.7 for Edmonds–Karp
+  (×999 for ×64, 80×60 → 640×480). Both are far below their cubic worst case, because grid graphs
+  have short augmenting paths, but still much faster-growing than DP. Graph Cut is
+  **~4,600–7,300× slower than DP** at 320×240, and ~7,700× slower at 640×480.
+
+**Working memory for one seam** (excluding the shared energy map):
+
+| Image size | Greedy (the seam) | DP (cost + predecessor tables) | Graph Cut (flow graph) |
+|---|---:|---:|---:|
+| 320×240 | 0.9 KB | 900 KB | 12,559 KB |
+| 640×480 | 1.9 KB | 3,600 KB | 50,318 KB |
+| 1920×1440 | 5.6 KB | 32,400 KB | — |
+
+The flow graph needs about **14× the memory of DP**: around 167 B/pixel for the edges and their
+residual twins, against DP's 12 B/pixel. Greedy needs almost none.
+
+**Full resize** of `samples/synthetic_tower.png`, 200×130 → 140×117 (60 vertical + 13 horizontal
+seams, energy map recomputed before every seam):
+
+| Algorithm | Total energy removed | Seam search | Energy maps | Total time |
+|---|---:|---:|---:|---:|
+| Greedy | 133,962 (1.45× DP) | 0.8 ms | 19.1 ms | **19.8 ms** |
+| Dynamic Programming | 92,595 | 8.3 ms | 21.7 ms | **29.9 ms** |
+| Graph Cut (Dinic) | 92,538 | 18,197 ms | 21.8 ms | **18,219 ms** |
+| Graph Cut (Edmonds–Karp) | 92,538 | 16,392 ms | 19.2 ms | **16,412 ms** |
+
+![Greedy | DP | Graph Cut](results/benchmark/synthetic_tower_carved_greedy_dp_graphcut.png)
+
+*Left to right: Greedy, DP, Graph Cut (Dinic).* DP and Graph Cut produce visually identical
+results, and Greedy squashes the clouds and distorts the tower. Graph Cut's total is 0.06 % *lower*
+than DP's even though every one of its seams is optimal. The reason is ties: when several seams
+have the same minimum energy, DP and Graph Cut may pick different ones. From then on they carve
+slightly different images, and removing one seam at a time is not optimal for the resize as a
+whole, for either algorithm.
+
+**Conclusion.**
+- **DP** gives the best trade-off: it is optimal, takes milliseconds even at 2.8 MP, and costs about
+  as much as the energy map it depends on.
+- **Greedy** saves only about a third of the end-to-end time (19.8 vs 29.9 ms), because the energy
+  map dominates, but removes 45 % more energy.
+- **Graph Cut** finds the same optimal seams as DP, but is about 600× slower end to end and uses 14×
+  the memory. Its value is generality, e.g. 3-D graphs for video seam carving, not speed on still
+  images.
+
+#### Measured improvements (Item 5d)
+
+The benchmark also measures prototypes of the Item 5d improvements. They live only in
+`tests/benchmark_algorithms.cpp` and do not change `DPSeamFinder` or `compute_energy`. Each one is
+first checked to give **exactly the same result** as the production code (same seam, bit-identical
+energy map), then timed.
+
+**1. Do we need the entire DP table?** No. Two rolling rows of costs plus a 1-byte parent offset
+(−1, 0, +1) per pixel give the same seam as `DPSeamFinder`'s full cost and predecessor tables:
+
+| Image size | Full tables (DP) | Rolling rows + 1-byte parents | Memory saved | Time (full → compact) | Same seam |
+|---|---:|---:|---:|---:|:---:|
+| 640×480 | 3,600 KB | 310 KB | 11.6× | 2.03 → 2.03 ms | ✔ |
+| 1280×960 | 14,400 KB | 1,220 KB | 11.8× | 9.00 → 8.34 ms | ✔ |
+| 1920×1440 | 32,400 KB | 2,730 KB | 11.9× | 19.6 → 19.6 ms | ✔ |
+
+About 12× less memory, at no cost in time. The space is still $O(WH)$, because backtracking needs one
+parent per pixel, but the constant drops from 12 bytes to about 1. If only the minimum energy were
+needed, and not the seam, two rows ($O(W)$) would be enough.
+
+**2. Does multithreading help?** It helps both, but the DP scales less well. Each row of the DP
+depends on the previous row, so the threads must synchronise after every row; the energy map has
+only one synchronisation point. Speed-up over the serial version (OpenMP, results identical to the
+serial code in every case):
+
+| Threads | Energy map 320×240 | Row-parallel DP 320×240 | Energy map 1920×1440 | Row-parallel DP 1920×1440 |
+|---:|---:|---:|---:|---:|
+| 2 | 1.90× | 1.80× | 1.53× | 1.83× |
+| 4 | 1.98× | 2.45× | 2.65× | 2.52× |
+| 8 | **3.99×** | **2.60×** | **3.70×** | **3.56×** |
+
+On the small image, the DP levels off at 2.6× on 8 threads while the energy map reaches 4×: each
+320-pixel row is too little work to hide the barrier. On the large image, each 1,920-pixel row is
+enough work, and the DP reaches 3.6×. Multithreading therefore pays off most for the energy map,
+which is also the largest cost per seam.
+
+**3. Incremental energy update.** After a vertical seam is removed, only the pixels next to it have
+new neighbours. The prototype shifts the previous energy map past the seam and recomputes at most
+4 pixels per row. Over 192 seams removed from a 640×480 scene with DP, the energy maps took
+**131.9 ms instead of 671.9 ms (5.1× faster)**, and they were identical to a full recompute at every
+step. This removes the largest per-seam cost for every algorithm, and for Greedy it makes the whole
+resize $O(k(W+H))$.
+
+---
+
 ### Performance & Memory Optimizations
 
 Directly profiling baseline max-flow algorithms on large grid networks revealed critical bottlenecks:
@@ -799,7 +915,7 @@ In compliance with **Item 9.a.v** of the CSD3130 Assignment 2 Brief, the followi
 |---|---|---|---|
 | **Aryan bin Mohamed Isran** (`aryanisran`) | **Google Gemini** | Google Antigravity CLI | **Graph Cut Optimization & Benchmarking**: <br>• Theoretical profiling of $O(V E^2)$ runtime bottlenecks on continuous gradient grid networks.<br>• Algorithmic design of Capacity Scaling ($\Delta$-scaling) and Multi-Path Wavefront Augmentation for Edmonds-Karp.<br>• Implementation of multi-branch blocking-flow DFS and dead-end level graph pruning in Dinic.<br>• Graph topology optimization (merging forward/backward edges, fixed-degree pre-allocation).<br>• Zero-allocation $O(\text{visited})$ array resets and raw pointer traversal in tight loops.<br>• Empirical benchmarking on 80×60 and 427×290 images, and rubric compliance verification. |
 | **Charity** (`t-charity`) | **Claude Opus 5.5** (Anthropic) | Claude Code | **Bonus Features (Item 7)**: <br>• Step-by-step seam replay and visualization engine (`bonus/visualize.py`).<br>• Streamlit interactive web application (`bonus/app.py`).<br>• Automated CI/CD pipeline and release workflow (`.github/workflows/ci.yml`).<br>• Python unit test suite for visualization replay (`bonus/tests/test_visualize.py`). |
-| **Chan Rou Hui** (`hui0w0`) | **Claude Opus 5.5** (Anthropic) | Claude Code | **Greedy Algorithm (Item 3)**: <br>• Implementation of `GreedySeamFinder` and its integration into `SeamCarver` / `--algorithm greedy`.<br>• Greedy unit tests (`tests/test_greedy.cpp`): counter-example, edge cases, brute-force and DP cross-checks.<br>• Greedy vs DP comparison tool (`tests/compare_greedy_dp.cpp`) and the results in `results/greedy_vs_dp/`.<br>• Write-up of README §2.2, review against the assignment brief and rubric, and extra verification (AddressSanitizer/UBSan builds, 20,000-map stress test). |
+| **Chan Rou Hui** (`hui0w0`) | **Claude Opus 5.5** (Anthropic) | Claude Code | **Greedy Algorithm (Item 3)**: <br>• Implementation of `GreedySeamFinder` and its integration into `SeamCarver` / `--algorithm greedy`.<br>• Greedy unit tests (`tests/test_greedy.cpp`): counter-example, edge cases, brute-force and DP cross-checks.<br>• Greedy vs DP comparison tool (`tests/compare_greedy_dp.cpp`) and the results in `results/greedy_vs_dp/`.<br>• Three-way benchmark of Greedy, DP and Graph Cut (`tests/benchmark_algorithms.cpp`, `results/benchmark/`), including prototype measurements of the Item 5d improvements.<br>• Write-up of README §2.2 and the Algorithm Benchmark section, review against the assignment brief and rubric, and extra verification (AddressSanitizer/UBSan builds, 20,000-map stress test). |
 
 ---
 

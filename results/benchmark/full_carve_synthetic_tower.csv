@@ -1,0 +1,5 @@
+algorithm,seams,total_energy_removed,seam_search_ms,energy_map_ms,total_ms
+Greedy,73,133962,0.755606,19.0546,19.8102
+DP,73,92594.7,8.25548,21.6929,29.9484
+GraphCut-Dinic,73,92537.8,18197.5,21.8492,18219.3
+GraphCut-EK,73,92537.8,16392.5,19.178,16411.6
