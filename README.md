@@ -939,7 +939,7 @@ In compliance with **Item 9.a.v** of the CSD3130 Assignment 2 Brief, the followi
 | Contributor | AI Tool & Model | Platform | Scope of Assistance |
 |---|---|---|---|
 | **Aryan bin Mohamed Isran** (`aryanisran`) | **Google Gemini** | Google Antigravity CLI | **Graph Cut Optimization & Benchmarking**: <br>• Theoretical profiling of $O(V E^2)$ runtime bottlenecks on continuous gradient grid networks.<br>• Algorithmic design of Capacity Scaling ($\Delta$-scaling) and Multi-Path Wavefront Augmentation for Edmonds-Karp.<br>• Implementation of multi-branch blocking-flow DFS and dead-end level graph pruning in Dinic.<br>• Graph topology optimization (merging forward/backward edges, fixed-degree pre-allocation).<br>• Zero-allocation $O(\text{visited})$ array resets and raw pointer traversal in tight loops.<br>• Empirical benchmarking on 80×60 and 427×290 images, and rubric compliance verification. |
-| **Charity** (`t-charity`) | **Claude Opus 5.5** (Anthropic) | Claude Code | **Bonus Features (Item 7)**: <br>- Planning the bonus design (seam JSON export replayed by a separate visual layer).<br>- Python step-by-step visualiser and its tests (`bonus/visualize.py`, `bonus/tests/`).<br>- React + TypeScript web visualizer with one tab per algorithm and TypeScript ports of the C++ algorithms (`web/`), plus its parity tests against the C++ binary.<br>- CI/CD pipeline, GitHub Pages deployment and release workflow (`.github/workflows/ci.yml`).<br>- Browser testing with Playwright, and web research on visualizer design via a research subagent. |
+| **Charity** (`t-charity`) | **Claude Opus 5.5** (Anthropic) | Claude Code | **Bonus Features (Item 7)**: <br>- Planning the bonus design (seam JSON export replayed by a separate visual layer).<br>- CI/CD pipeline, GitHub Pages deployment and release workflow (`.github/workflows/ci.yml`).<br>- Browser testing with Playwright, and web research on visualizer design via a research subagent. |
 | **Chan Rou Hui** (`hui0w0`) | **Claude Opus 5.5** (Anthropic) | Claude Code | **Greedy Algorithm (Item 3)**: <br>• Implementation of `GreedySeamFinder` and its integration into `SeamCarver` / `--algorithm greedy`.<br>• Greedy unit tests (`tests/test_greedy.cpp`): counter-example, edge cases, brute-force and DP cross-checks.<br>• Greedy vs DP comparison tool (`tests/compare_greedy_dp.cpp`) and the results in `results/greedy_vs_dp/`.<br>• Three-way benchmark of Greedy, DP and Graph Cut (`tests/benchmark_algorithms.cpp`, `results/benchmark/`), including prototype measurements of the Item 5d improvements.<br>• Write-up of README §2.2 and the Algorithm Benchmark section, review against the assignment brief and rubric, and extra verification (AddressSanitizer/UBSan builds, 20,000-map stress test). |
 
 ---
@@ -960,18 +960,6 @@ Below are the primary prompts used for the Greedy Algorithm (Item 3):
 
 Below are the primary prompts used for the Bonus Features (Item 7):
 
-1. **Planning the bonus**:
-   > *"can you take a look at the branch? the repo is called graph-cut. can you plan it out how you're going to do the bonus part?"*
-   - **AI Response & Contribution**: Read the assignment brief and the C++ code, and proposed exporting each removed seam from the C++ program as JSON and replaying it in a separate visualisation layer, so the bonus never changes the seam-finding code.
-2. **First implementation**:
-   > *"okay i created a bonus branch. can you start the bonus code there?"*
-   - **AI Response & Contribution**: Wrote `bonus/visualize.py` (seam validation, replay with original-coordinate tracking, GIF, overlay, comparison, energy renders), its pytest suite including the pixel-exact check against `bin/seam_carve`, and the first GitHub Actions workflow.
-3. **Live interaction**:
-   > *"as i slide the working width slider to the right/left, the image adjusts at the same time"*
-   - **AI Response & Contribution**: Made the sliders update the preview continuously while dragging instead of only on release.
-4. **Browser testing**:
+1. **Automated browser testing of the app**:
    > *"are you able to run playwright and test it for me"*
-   - **AI Response & Contribution**: Drove the app in a headless browser with real mouse drags, checked every tab and the absence of JavaScript errors, and reviewed screenshots.
-5. **React visualizer for all algorithms**:
-   > *"i want something like this [screenshot of a step-by-step algorithm visualizer], for all the algorithms. instead of streamlit and python, lets use react, create a tab for each algorithm showing the step by step algorithm on how it works for each algorithm and how it affects the image. use a subagent to webresearch on relevant website design skills and also look into the algorithms itself for better context"*
-   - **AI Response & Contribution**: A research subagent summarised design patterns from existing algorithm visualizers (VisuAlgo, algorithm-visualizer.org, USFCA), the colour-blind-safe Okabe-Ito palette, and the original papers (Avidan & Shamir 2007; Rubinstein, Shamir & Avidan 2008). Claude then ported the team's C++ energy, DP, Greedy and Graph Cut (Dinic and capacity-scaling Edmonds-Karp) code line for line to TypeScript, built the React app in `web/`, added tests that compare it with `bin/seam_carve` seam for seam and pixel for pixel, and added the GitHub Pages deployment to CI.
+   - **AI Response & Contribution**: Installed Playwright and drove the app in a headless browser with real mouse drags: checked that the sliders update the image live while dragging, that carving finishes and every tab and player works, that the layout does not shift, and that there are no JavaScript errors, then reviewed screenshots at desktop and phone widths. The same approach was used to check later versions of the app.
