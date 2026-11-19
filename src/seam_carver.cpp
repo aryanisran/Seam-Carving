@@ -1,4 +1,5 @@
 #include "seam_carver.hpp"
+#include "greedy_seam.hpp"
 
 #include <fstream>
 #include <memory>
@@ -34,7 +35,8 @@ void SeamCarver::carve_vertical_seams(Image& img, int count, std::vector<CarveRe
                 res = DPSeamFinder::find_vertical_seam(energy);
                 break;
             case AlgorithmType::Greedy:
-                throw std::runtime_error("GreedySeamFinder is not implemented yet (Team C)");
+                res = GreedySeamFinder::find_vertical_seam(energy);
+                break;
             case AlgorithmType::GraphCut:
             default:
                 res = GraphCutSeamFinder::find_vertical_seam(energy, *solver);
@@ -85,7 +87,8 @@ void SeamCarver::carve_horizontal_seams(Image& img, int count, std::vector<Carve
                 res = DPSeamFinder::find_horizontal_seam(energy);
                 break;
             case AlgorithmType::Greedy:
-                throw std::runtime_error("GreedySeamFinder is not implemented yet (Team C)");
+                res = GreedySeamFinder::find_horizontal_seam(energy);
+                break;
             case AlgorithmType::GraphCut:
             default:
                 res = GraphCutSeamFinder::find_horizontal_seam(energy, *solver);

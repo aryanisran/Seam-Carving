@@ -27,7 +27,7 @@ struct CarveRecord {
 enum class AlgorithmType {
     GraphCut,
     DynamicProgramming,
-    Greedy // reserved for Team C's GreedySeamFinder; selecting this currently throws.
+    Greedy // Team C's GreedySeamFinder (include/greedy_seam.hpp)
 };
 
 class SeamCarver {
